@@ -9,7 +9,12 @@ By leveraging SwiftDialog, Installomator, and original code, Baseline provides a
 - A configuration profile defining what Installomator labels, Packages, or Scripts you wish to run
 
 ## How it Works
-When the Baseline installation package is run, assets are delivered as well as a LaunchDaemon. The LaunchDaemon calls the primary script `/usr/local/Baseline/Baseline.sh`. The LaunchDaemon is used in order to ensure your management tools are not paused waiting for the enrollment process to complete. 
+
+### Basics
+
+When the Baseline installation package is run, assets are delivered as well as a LaunchDaemon. The LaunchDaemon calls the primary script `/usr/local/Baseline/Baseline.sh`. This method is used in order to ensure your management tools are not paused waiting for Baseline to complete. 
+
+### Order of Operations
 
 Once the daemon initiates the primary script is run, the following sequence occurs:
 1. Verifies a configuration file in the preference doman of `com.secondsonconsulting.baseline` is present on the device.
@@ -27,7 +32,11 @@ Once the daemon initiates the primary script is run, the following sequence occu
 1. Baseline deletes he LaunchDaemon, so that it is not loaded again after a restart.
 1. `/usr/local/Baseline` is deleted
 1. The user is presented with a simple message indicating whether everything went smoothly or if there were errors. This message has a 30 second timer.
-1. After the 30 second timer, the device restarts.
+1. After the 30 second timer, or if the "escape" key combination is used, the device forcibly restarts via `shutdown -r now`
+
+### Additional Info
+
+Baseline uses built in SwiftDialog features to prevent user access during the setup process. There is an optional "escape" key to close the Dialog windows using `CMD+]`. Using this escape key does not stop Baseline from running, it simply closes the Dialog window. 
 
 ## How to Initiate it
 Baseline was designed to be run in a multitude of ways:
@@ -46,4 +55,11 @@ Within the Baseline folder are the following:
 
 The installation package also installs and loads a LaunchDaemon: `/Library/LaunchDaemons/com.secondsonconsulting.baseline.plist`
 
-The Baseline log can be found at `/usr/local/Baseline.log`
+Baseline logs can be found at `/var/log/Baseline/Baseline.log` and `/var/log/Baseline/DaemonOutput.log`
+
+## Self-Destructing
+Upon completion, Baseline deletes the following files and folders
+- `/usr/local/Baseline`
+- `/Library/LaunchDaemons/com.secondsonconsulting.baseline.plist`
+
+The only files which will be left behind are logs.
