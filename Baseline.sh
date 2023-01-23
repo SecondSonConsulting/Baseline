@@ -1,6 +1,6 @@
 #!/bin/zsh
-#set -x
-dryRun=1
+set -x
+#dryRun=1
 
 #   Written by Trevor Sysock of Second Son Consulting
 #   @BigMacAdmin on the MacAdmins Slack
@@ -26,9 +26,8 @@ fi
 #######################
 #Variables for our primary Dialog window
 dialogTitle="Your computer setup is underway"
-dialogMessage="This can take a while. \n\nPlease sit back and wait while we make sure things get setup properly..."
-dialogIcon="SF=laptopcomputer"
-dialogOverlayIcon="/System/Library/CoreServices/Erase Assistant.app"
+dialogMessage="Feel free to step away, this could take 30 minutes or more. \n\nYour computer will restart when it's ready for use."
+dialogIcon="/System/Library/CoreServices/Erase Assistant.app"
 dialogAdditionalOptions=(
     --blurscreen
     --width 900
@@ -37,12 +36,10 @@ dialogAdditionalOptions=(
 
 #Variables for our Successful Completion Dialog window
 successDialogTitle="Your computer setup is complete"
-successDialogMessage="Your device will automatically restart in 30 seconds."
+successDialogMessage="Your device needs to restart before you can begin use."
 successDialogIcon="$dialogIcon"
-successDialogOverlayIcon="$dialogOverlayIcon"
 successDialogAdditionalOptions=(
     --blurscreen
-    --height 550
 )
 successDialogRestartButtonText="Restart Now"
 
@@ -50,7 +47,6 @@ successDialogRestartButtonText="Restart Now"
 failureDialogTitle="Your computer setup is complete"
 failureDialogMessage="Your computer setup is complete, however not everything was installed as expected. Review the list below, and contact IT if you need assistance."
 failureDialogIcon="$dialogIcon"
-failureDialogOverlayIcon="$dialogOverlayIcon"
 failureDialogAdditionalOptions=(
     --blurscreen
     --height 550
@@ -59,7 +55,7 @@ failureDialogRestartButtonText="Restart Now"
 
 #Default Installomator Options
 defaultInstallomatorOptions=(
-    
+    BLOCKING_PROCESS_ACTION=kill
 )
 
 if [ "$dryRun" = 1 ]; then
@@ -208,6 +204,7 @@ function cleanup_and_restart()
   
     # If this isn't a test run, force a restart
     if [ "$dryRun" != 1 ]; then
+        rm_if_exists "$BaselineDir"
         shutdown -r now
     fi
     #Everything below here in this function is for testing/debugging
@@ -265,7 +262,7 @@ function install_dialog()
             teamID=$(/usr/sbin/spctl -a -vv -t install "$tempDirectory/Dialog.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
             # Install the package if Team ID validates
             if [ "$expectedDialogTeamID" = "$teamID" ]; then
-                /usr/sbin/installer -pkg "$tempDirectory/Dialog.pkg" -target /
+                /usr/sbin/installer -pkg "$tempDirectory/Dialog.pkg" -target /  > /dev/null 2>&1
                 dialogInstallExitCode=$?
             fi
             if [ ! -e "$dialogAppPath" ]; then
@@ -299,7 +296,7 @@ function install_installomator()
         teamID=$(/usr/sbin/spctl -a -vv -t install "$tempDirectory/Installomator.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
         # Install the package if Team ID validates
         if [ "$expectedTeamID" = "$teamID" ]; then
-            /usr/sbin/installer -pkg "$tempDirectory/Installomator.pkg" -target /
+            /usr/sbin/installer -pkg "$tempDirectory/Installomator.pkg" -target /  > /dev/null 2>&1
             installomatorInstallExitCode=$?
         fi
         if [ ! -e "$installomatorPath" ]; then
@@ -435,11 +432,21 @@ function build_script_arrays()
 
 function process_scripts()
 {
+
     #Set an index internal to this function
     currentIndex=0
     #Loop through and test if there is a value in the slot of this index for the given array
     #If this command fails it means we've reached the end of the array in the config file (or there are none) and we exit our loop
     while $pBuddy -c "Print :Scripts:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
+        #Unset variables for next loop
+        unset expectedMD5
+        unset actualMD5
+        unset currentArguments
+        unset currentArgumentArray
+        unset currentScript
+        unset currentScriptPath
+        unset currentDisplayName
+        unset scriptDownloadExitCode
         #Get the display name of the label we're installing. We need this to update the dialog list
         currentDisplayName=$($pBuddy -c "Print :Scripts:${currentIndex}:DisplayName" "$BaselineConfig")
         #Set the current script name
@@ -531,13 +538,6 @@ function process_scripts()
             successList+=("$currentDisplayName")
        fi
 
-       #Unset variables for next loop
-       unset expectedMD5
-       unset actualMD5
-       unset currentArguments
-       unset currentArgumentArray
-
-
        #Iterate index for next loop
         currentIndex=$((currentIndex+1))
     done
@@ -566,6 +566,19 @@ function process_pkgs()
     #Loop through and test if there is a value in the slot of this index for the given array
     #If this command fails it means we've reached the end of the array in the config file (or there are none) and we exit our loop
     while $pBuddy -c "Print :Packages:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
+        # Unset variables for next loop
+        unset currentPKG
+        unset currentPKGPath
+        unset expectedTeamID
+        unset expectedMD5
+        unset actualTeamID
+        unset actualMD5
+        unset currentArguments
+        unset currentArgumentArray
+        unset currentDisplayName
+        unset pkgBasename
+        unset downloadResult
+
         #Get the display name of the label we're installing. We need this to update the dialog list
         currentDisplayName=$($pBuddy -c "Print :Packages:${currentIndex}:DisplayName" "$BaselineConfig")
         #Set the current package path
@@ -638,29 +651,29 @@ function process_pkgs()
 
         if $pBuddy -c "Print :Packages:${currentIndex}:TeamID" "$BaselineConfig" > /dev/null 2>&1; then
             #This pkg has TeamID defined
-            currentTeamIDValidation=$($pBuddy -c "Print :Packages:${currentIndex}:TeamID" "$BaselineConfig")
+            expectedTeamID=$($pBuddy -c "Print :Packages:${currentIndex}:TeamID" "$BaselineConfig")
         else
             #This pkg does not have TeamID Validation defined
-            currentTeamIDValidation=""
+            expectedTeamID=""
         fi
         if $pBuddy -c "Print :Packages:${currentIndex}:MD5" "$BaselineConfig" > /dev/null 2>&1; then
             #This script has MD5 defined
-            currentMD5Validation=$($pBuddy -c "Print :Packages:${currentIndex}:MD5" "$BaselineConfig")
+            expectedMD5=$($pBuddy -c "Print :Packages:${currentIndex}:MD5" "$BaselineConfig")
         else
             #This script does not have MD5 defined
-            currentMD5Validation=""
+            expectedMD5=""
         fi
         #Update the dialog window so that this item shows as "pending"
         dialog_list_command "listitem: $currentDisplayName: wait"
         
         ## Package validation happens here
         # Check TeamID, if a value has been provided
-        if [ -n "$currentTeamIDValidation" ]; then
+        if [ -n "$expectedTeamID" ]; then
             #Get the TeamID for the current PKG
             actualTeamID=$(spctl -a -vv -t install "$currentPKG" 2>&1 | awk -F '(' '/origin=/ {print $2 }' | tr -d ')' )
             # Check if actual does not match expected
-            if [ "$currentTeamIDValidation" != "$actualTeamID" ]; then
-                report_message "TeamID validation of PKG failed: $currentPKG - Expected: $currentTeamIDValidation Actual: $actualTeamID"
+            if [ "$expectedTeamID" != "$actualTeamID" ]; then
+                report_message "TeamID validation of PKG failed: $currentPKG - Expected: $expectedTeamID Actual: $actualTeamID"
                 dialog_list_command "listitem: $currentDisplayName: fail"
                 failList+=("$currentDisplayName")
                 # Iterate the index up one
@@ -670,17 +683,17 @@ function process_pkgs()
                 # Bail this pass through the while loop and continue processing next item
                 continue
             else
-                report_message "TeamID of PKG validated: $currentPKG $currentTeamIDValidation"
+                report_message "TeamID of PKG validated: $currentPKG $expectedTeamID"
             fi
         fi
         
         # Check MD5, if a value has been provided
-        if [ -n "$currentMD5Validation" ]; then
+        if [ -n "$expectedMD5" ]; then
             #Get MD5 for the current PKG
             actualMD5=$(md5 -q "$currentPKG")
             # Check if actual does not match expected
-            if [ "$currentMD5Validation" != "$actualMD5" ]; then
-                report_message "MD5 validation of PKG failed: $currentPKG - Expected: $currentMD5Validation Actual: $actualMD5"
+            if [ "$expectedMD5" != "$actualMD5" ]; then
+                report_message "MD5 validation of PKG failed: $currentPKG - Expected: $expectedMD5 Actual: $actualMD5"
                 dialog_list_command "listitem: $currentDisplayName: fail"
                 failList+=("$currentDisplayName")
                 # Iterate the index up one
@@ -690,7 +703,7 @@ function process_pkgs()
                 # Bail this pass through the while loop and continue processing next item
                 continue
             else
-                report_message "MD5 of PKG validated: $currentPKG $currentMD5Validation"
+                report_message "MD5 of PKG validated: $currentPKG $expectedMD5"
             fi
         fi
 
@@ -709,15 +722,6 @@ function process_pkgs()
             successList+=("$currentDisplayName")
         fi
         debug_message "Output of the install package command: $pkgInstallerOutput"
-        # Unset variables for next loop
-        unset currentPKG
-        unset currentPKGPath
-        unset currentTeamIDValidation
-        unset currentMD5Validation
-        unset actualTeamID
-        unset actualMD5
-        unset currentArguments
-        unset currentArgumentArray
         # Iterate to the next index item, and continue our loop
         currentIndex=$((currentIndex+1))
     done
@@ -851,7 +855,6 @@ $dialogPath \
 --title "$dialogTitle" \
 --message "$dialogMessage" \
 --icon "$dialogIcon" \
---overlayicon "$dialogOverlayIcon" \
 ${dialogAdditionalOptions[@]} \
 --button1disabled \
 --commandfile "$dialogCommandFile" \
@@ -894,10 +897,10 @@ if [ -z "$failList" ]; then
     --title "$successDialogTitle" \
     --message "$successDialogMessage" \
     --icon "$successDialogIcon" \
-    --overlayicon "$successDialogOverlayIcon" \
     --button1text "$successDialogRestartButtonText" \
     ${successDialogAdditionalOptions[@]} \
-    --timer 30
+    --timer 120
+
     cleanup_and_restart
 else
     #Build fail list
@@ -910,7 +913,6 @@ else
     --title "$failureDialogTitle" \
     --message "$failureDialogMessage" \
     --icon "$failureDialogIcon" \
-    --overlayicon "$failureDialogOverlayIcon" \
     --button1text "$failureDialogRestartButtonText" \
     ${failureDialogAdditionalOptions[@]} \
     ${failListItems[@]} \
