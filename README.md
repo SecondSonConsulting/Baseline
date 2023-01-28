@@ -37,13 +37,15 @@ Once the daemon initiates the primary script is run, the following sequence occu
 
 Baseline uses the `--blurscreen` SwiftDialog feature to prevent user access during the setup process. There is an optional "escape" key to close the Dialog windows using `CMD+]`. Using this escape key does not stop Baseline from running, it simply closes the Dialog window. 
 
-## How to Initiate it
+### How to Initiate it
 Baseline was designed to be run in any way you may need:
 - Install the package during automated device enrollment or any other trigger you see fit
 - Guide your users to run the package via Self-Service
 - Run it manually like any other package
 
-## Files and Folders
+### Files and Folders
+All files are deleted upon completion, with the exception of the logs.
+
 Baseline assets are installed in the following directory: `/usr/local/Baseline`
 
 Within the Baseline folder are the following:
@@ -56,13 +58,80 @@ The installation package also installs and loads a LaunchDaemon: `/Library/Launc
 Baseline logs can be found at `/var/log/Baseline/Baseline.log`
 The full script output can be found at `/var/log/Baseline/DaemonOutput.log`
 
-## Self-Destructing
-Upon completion, Baseline deletes the following files and folders
-- `/usr/local/Baseline`
-- `/Library/LaunchDaemons/com.secondsonconsulting.baseline.plist`
-
-The only files which will be left behind are logs.
+# Configuration Profile
+Baseline performs actions based on a configuration profile delivered via MDM or manually installed. The top level keys in the profile are arrays with dictionaries defined beneath them.
 
 ## Defining Installomator Labels
-Required arguments for an Installomator label:
-- `<`
+
+By default, Baseline runs Installomator labels with the following arguments:
+`BLOCKING_PROCESS_ACTION=kill`
+
+ Required arguments for an Installomator label:
+- `<DisplayName>` : The human facing name of this item.
+- `<Label>` : The Installomator label
+
+Optional arguments for an Installomator label:
+- `<Arguments>` : Additional options/arguments passed to Installomator for this label. These can be simple, or a complete `valuesfromarguments` custom label.
+
+Example Installomator configurations:
+```
+<key>Installomator</key>
+<array>
+    <dict>
+        <key>DisplayName</key>
+        <string>Google Chrome</string>
+        <key>Label</key>
+        <string>googlechromepkg</string>
+    </dict>
+    <dict>
+        <key>DisplayName</key>
+        <string>Microsoft Office 365</string>
+        <key>Label</key>
+        <string>valuesfromarguments</string>
+        <key>Arguments</key>
+        <string>"name=desktoppr" "type=pkg" "downloadURL=https://github.com/scriptingosx/desktoppr/releases/download/v0.3/desktoppr-0.3.pkg" "expectedTeamID=JME5BW3F3R"</string>
+    </dict>
+</array>
+```
+
+## Defining Packages
+Required arguments for Packages:
+- `<DisplayName>` : The human facing name of this item
+- `<PackagePath>` : The path to the package to be installed. The path can be defined in three ways
+    - The filename of a package you have placed in the `/usr/local/Baseline/Packages` directory. This is useful if you package Baseline yourself and include additional packages.
+    - A local file path. Example: `/Library/Application Support/ManagementDirectory/CompanyLogos.pkg`
+    - A remote URL hosting a package to be installed: `https://github.com/SecondSonConsulting/Renew/releases/download/v1.0.1/Renew_v1.0.1.pkg`
+
+Optional arguments for Packages:
+- `<TeamID>` : Use this to define the expected TeamID of a signed package in order to verify the authenticity.
+- `<MD5>` : Use this to define the expected md5 hash to ensure the integrity of your package.
+- `<Arguments>` : In the rare cases a .pkg has additional arguments you wish to pass through the `installer` command, you can do so using this key.
+
+## Define Scripts
+Required arguments for Scripts:
+- `<DisplayName>` : The human facing name of this item
+- `<ScriptPath>` : The path to the script to be installed. The path can be defined in three ways
+    - The filename of a script you have placed in the `/usr/local/Baseline/Scripts` directory. This is useful if you package Baseline yourself and include additional scripts.
+    - A local file path. Example: `/Library/Application Support/ManagementDirectory/UserSetup.sh`
+    - A remote URL hosting a script to be run: `https://github.com/SecondSonConsulting/macOS-Scripts/blob/main/sophosInstall.sh`
+
+Optional arguments for Scripts:
+- `<MD5>` : Use this to define the expected md5 hash to ensure the integrity of your script.
+- `<Arguments>` : Use this to define additional arguments you wish to pass to your script.
+```
+<key>Scripts</key>
+<array>
+    <dict>
+        <key>DisplayName</key>
+        <string>Example Script</string>
+        <key>ScriptPath</key>
+        <string>https://github.com/SecondSonExampleScript.sh</string>
+        <key>Arguments</key>
+        <string>--group "Standard Workstations"</string>
+        <key>MD5</key>
+        <string>e567252z26d6032dd232df75fd3ba500</string>
+    </dict>
+</array>
+```
+
+## Screenshots

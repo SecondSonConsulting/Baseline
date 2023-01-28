@@ -387,19 +387,19 @@ function process_installomator_labels()
         #Set the current label name
         currentLabel=$($pBuddy -c "Print :Installomator:${currentIndex}:Label" "$BaselineConfig")
         #Check if there are Options defined, and set the variable accordingly
-        if $pBuddy -c "Print :Installomator:${currentIndex}:Options" "$BaselineConfig" > /dev/null 2>&1; then
+        if $pBuddy -c "Print :Installomator:${currentIndex}:Arguments" "$BaselineConfig" > /dev/null 2>&1; then
             #This label has options defined
-            currentOptions=$($pBuddy -c "Print :Installomator:${currentIndex}:Options" "$BaselineConfig")
+            currentArguments=$($pBuddy -c "Print :Installomator:${currentIndex}:Arguments" "$BaselineConfig")
         else
             #This label does not have options defined
-            currentOptions=""
+            currentArguments=""
         fi
         #Get the display name of the label we're installing. We need this to update the dialog list
         currentDisplayName=$($pBuddy -c "Print :Installomator:${currentIndex}:DisplayName" "$BaselineConfig")
         #Update the dialog window so that this item shows as "pending"
         dialog_list_command "listitem: $currentDisplayName: wait"
-        #Call installomator with our desired options. Default options first, so that they can be overriden by "currentOptions"
-        $installomatorPath $currentLabel ${defaultInstallomatorOptions[@]} $currentOptions > /dev/null 2>&1
+        #Call installomator with our desired options. Default options first, so that they can be overriden by "currentArguments"
+        $installomatorPath $currentLabel ${defaultInstallomatorOptions[@]} $currentArguments > /dev/null 2>&1
         installomatorExitCode=$?
         if [ $installomatorExitCode != 0 ]; then
             report_message "Installomator failed to install: $currentLabel - Exit Code: $installomatorExitCode"
@@ -886,8 +886,6 @@ fi
 
 #Close our running dialog window
 dialog_command "quit:"
-
-
 
 #Do final script swiftDialog stuff
 #If the failList is empty, this means success
