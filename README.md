@@ -5,8 +5,8 @@ By leveraging SwiftDialog, Installomator, and original code, Baseline provides a
 
 ## Requirements
 - macOS 11 or newer
-- A signed installation PKG for the project. Either the provided PKG or your own.
-- A configuration profile defining what Installomator labels, Packages, or Scripts you wish to run
+- An installation PKG for the project. Either the provided PKG or your own.
+- A configuration profile defining what Installomator labels, Packages, and/or Scripts you wish to run
 
 ## How it Works
 
@@ -22,25 +22,24 @@ Once the daemon initiates the primary script is run, the following sequence occu
 1. If Installomator labels are defined in the mobile configuration profile, then the latest version of Installomator is installed.
 1. The latest version of SwiftDialog is installed.
 1. Baseline then waits until an active end user is logged in on the device.
-    1. This process does not have a timeout, it will continue to wait until a user has logged into the device.
-1. Once a valid user is identified, a SwiftDialog list is drawn showing a list of all items to be processed. This list will be dynamically updated as items are processed.
+    1. This process does not have a timeout and will continue to wait until a user has logged into the device.
+1. When a valid user is identified a SwiftDialog progress list will show each item as its processed.
 1. Installomator is used to process any labels defined in the configuration profile
 1. Any scripts defined in the configuration profile are run.
-    1. At this time, only 1 script argument is supported but support for unlimited arguments should be coming in a future version.
-1. Any packages defined in the configuration profile are run. MD5 and/or TeamID verification are supported to validate scripts.
-1. If a custom SwiftDialog icon has been added (probably by virtue of a PKG or script processed by Baseline), Baseline will re-install SwiftDialog in order to apply the custom branding icon.
-1. Baseline deletes he LaunchDaemon, so that it is not loaded again after a restart.
-1. `/usr/local/Baseline` is deleted
-1. The user is presented with a simple message indicating whether everything went smoothly or if there were errors. This message has a 30 second timer.
-1. After the 30 second timer, or if the "escape" key combination is used, the device forcibly restarts via `shutdown -r now`
+1. Any packages defined in the configuration profile are run.
+1. If a custom app icon has been configured for SwiftDialog, then it will be reinstalled in order to pickup this icon.
+1. Baseline deletes the LaunchDaemon, so that it is not loaded again after a restart.
+1. The entire directory `/usr/local/Baseline` is deleted.
+1. The user is presented with a simple message indicating whether everything went smoothly or if there were errors. This message has a timer (default 30 seconds for success, 5 minutes if any items had an error.)
+1. After the timer the device forcibly restarts via `shutdown -r now`
 
 ### Additional Info
 
-Baseline uses built in SwiftDialog features to prevent user access during the setup process. There is an optional "escape" key to close the Dialog windows using `CMD+]`. Using this escape key does not stop Baseline from running, it simply closes the Dialog window. 
+Baseline uses the `--blurscreen` SwiftDialog feature to prevent user access during the setup process. There is an optional "escape" key to close the Dialog windows using `CMD+]`. Using this escape key does not stop Baseline from running, it simply closes the Dialog window. 
 
 ## How to Initiate it
-Baseline was designed to be run in a multitude of ways:
-- Install the package during automated device enrollment or via any trigger you see fit
+Baseline was designed to be run in any way you may need:
+- Install the package during automated device enrollment or any other trigger you see fit
 - Guide your users to run the package via Self-Service
 - Run it manually like any other package
 
@@ -50,12 +49,12 @@ Baseline assets are installed in the following directory: `/usr/local/Baseline`
 Within the Baseline folder are the following:
 - `Packages/`
 - `Scripts/`
-- `Support/`
 - `Baseline.sh`
 
 The installation package also installs and loads a LaunchDaemon: `/Library/LaunchDaemons/com.secondsonconsulting.baseline.plist`
 
-Baseline logs can be found at `/var/log/Baseline/Baseline.log` and `/var/log/Baseline/DaemonOutput.log`
+Baseline logs can be found at `/var/log/Baseline/Baseline.log`
+The full script output can be found at `/var/log/Baseline/DaemonOutput.log`
 
 ## Self-Destructing
 Upon completion, Baseline deletes the following files and folders
@@ -63,3 +62,7 @@ Upon completion, Baseline deletes the following files and folders
 - `/Library/LaunchDaemons/com.secondsonconsulting.baseline.plist`
 
 The only files which will be left behind are logs.
+
+## Defining Installomator Labels
+Required arguments for an Installomator label:
+- `<`
