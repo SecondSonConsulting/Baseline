@@ -5,16 +5,6 @@
 	<key>PayloadContent</key>
 	<array>
 		<dict>
-			<key>PayloadDisplayName</key>
-			<string>Baseline</string>
-			<key>PayloadIdentifier</key>
-			<string>com.secondsonconsulting.baseline.D031FEC3-06B0-497A-BC0A-5D24AE8E91AD</string>
-			<key>PayloadType</key>
-			<string>com.secondsonconsulting.baseline</string>
-			<key>PayloadUUID</key>
-			<string>D031FEC3-06B0-497A-BC0A-5D24AE8E91AD</string>
-			<key>PayloadVersion</key>
-			<integer>1</integer>
 			<key>Installomator</key>
 			<array>
 				<dict>
@@ -36,11 +26,37 @@
 					<string>zoom</string>
 				</dict>
 			</array>
-			<key>Scripts</key>
-			<array>
-			</array>
 			<key>Packages</key>
 			<array>
+				<dict>
+					<key>DisplayName</key>
+					<string>Mist v0.5</string>
+					<key>PackagePath</key>
+					<string>https://github.com/ninxsoft/Mist/releases/download/v0.5/Mist.0.5.pkg</string>
+					<key>TeamID</key>
+					<string>7K3HVCLV7Z</string>
+				</dict>
+			</array>
+			<key>PayloadDisplayName</key>
+			<string>Baseline</string>
+			<key>PayloadIdentifier</key>
+			<string>com.secondsonconsulting.baseline.D031FEC3-06B0-497A-BC0A-5D24AE8E91AD</string>
+			<key>PayloadType</key>
+			<string>com.secondsonconsulting.baseline</string>
+			<key>PayloadUUID</key>
+			<string>97DE51A6-850F-46AB-98A6-BD9A80F7AF36</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+			<key>Scripts</key>
+			<array>
+				<dict>
+					<key>DisplayName</key>
+					<string>Enabling Location Services</string>
+					<key>MD5</key>
+					<string>c32364f1f3f7fc2410e265d82095feee</string>
+					<key>ScriptPath</key>
+					<string>https://raw.githubusercontent.com/acodega/macos/main/enable_location-services.sh</string>
+				</dict>
 			</array>
 		</dict>
 	</array>
@@ -49,7 +65,7 @@
 	<key>PayloadDisplayName</key>
 	<string>Baseline Config</string>
 	<key>PayloadIdentifier</key>
-	<string>SECONDSON.6F1AD41D-2069-4861-B72C-C5F0D44C9B99</string>
+	<string>SecondSon.6F1AD41D-2069-4861-B72C-C5F0D44C9B99</string>
 	<key>PayloadOrganization</key>
 	<string>Second Son Consulting Inc.</string>
 	<key>PayloadScope</key>
@@ -57,7 +73,7 @@
 	<key>PayloadType</key>
 	<string>Configuration</string>
 	<key>PayloadUUID</key>
-	<string>53C97AF2-0204-476E-BAC9-E805FF698FA3</string>
+	<string>B842AE0F-70AE-4C1C-8556-D28F10168D89</string>
 	<key>PayloadVersion</key>
 	<integer>1</integer>
 </dict>
