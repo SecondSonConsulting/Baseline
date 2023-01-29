@@ -1,4 +1,4 @@
-# Baseline
+# Baseline (Public Beta)
 An MDM agnostic zero touch solution for macOS. 
 
 By leveraging SwiftDialog, Installomator, and original code, Baseline provides an automated way to install applications and run scripts. Configure the bahavior of Baseline via a mobileconfig file. Baseline will install packages, scripts, and Installomator labels as defined in the configuration profile.
