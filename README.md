@@ -137,3 +137,4 @@ Optional arguments for Scripts:
 Currently Baseline is not included in the iMazing Profile Editor default repository, when a full release is announced a pull request will be made to make this happen.
 For now, you can utilize iMazing by downloading the plist file in the "Profile Manifest" folder of this Github repo and then following the "Simple customization" instructions to get it in place on your workstation: https://imazing.com/guides/imazing-profile-editor-working-with-custom-preference-manifests
 ## Screenshots
+![Baseline-Progress](https://user-images.githubusercontent.com/106293503/215353375-baee3354-9cf8-463b-b92d-65fde266498c.png)
