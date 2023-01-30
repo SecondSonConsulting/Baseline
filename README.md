@@ -17,7 +17,7 @@ When the Baseline installation package is run, assets are delivered as well as a
 
 ### Order of Operations
 
-Once the daemon initiates the primary script is run, the following sequence occurs:
+Once the primary script is run, the following sequence occurs:
 1. Verifies a configuration file in the preference doman of `com.secondsonconsulting.baseline` is present on the device.
     1. Baseline will timeout after 10 minutes if a profile cannot be found.
 1. If Installomator labels are defined in the mobile configuration profile, then the latest version of Installomator is installed.
