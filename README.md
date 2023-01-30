@@ -2,7 +2,7 @@
 ![Baseline-Progress](https://user-images.githubusercontent.com/106293503/215353375-baee3354-9cf8-463b-b92d-65fde266498c.png)
 An MDM agnostic zero touch solution for macOS. 
 
-By leveraging SwiftDialog, Installomator, and original code, Baseline provides an automated way to install applications and run scripts. Configure the bahavior of Baseline via a mobileconfig file. Baseline will install packages, scripts, and Installomator labels as defined in the configuration profile.
+By leveraging SwiftDialog, Installomator, and original code, Baseline provides an automated way to install applications and run scripts. Configure the behavior of Baseline via a mobileconfig file. Baseline will install packages, scripts, and Installomator labels as defined in the configuration profile.
 
 ## Requirements
 - macOS 11 or newer
