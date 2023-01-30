@@ -138,3 +138,7 @@ Optional arguments for Scripts:
 ## Using iMazing Profile Editor
 Currently Baseline is not included in the iMazing Profile Editor default repository, when a full release is announced a pull request will be made to make this happen.
 For now, you can utilize iMazing by downloading the plist file in the "Profile Manifest" folder of this Github repo and then following the "Simple customization" instructions to get it in place on your workstation: https://imazing.com/guides/imazing-profile-editor-working-with-custom-preference-manifests
+
+## Thank you to the Mac Admins Community
+This project wouldn’t be possible without the amazing hard work provided to the Mac Admins community. Bart Reardon, Søren Theilgaard, Armin Briegel, Adam Codega, Dan Snelson, and all of the other amazing people maintaining and testing SwiftDialog, Installomator, and other community tools.
+We are happy to have the opportunity to give back, and hope other Mac Admins might find this project useful.
