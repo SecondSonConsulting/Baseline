@@ -26,13 +26,13 @@ Once the primary script is run, the following sequence occurs:
     1. This process does not have a timeout and will continue to wait until a user has logged into the device.
 1. When a valid user is identified a SwiftDialog progress list will show each item as its processed.
 1. Installomator is used to process any labels defined in the configuration profile
-1. Any scripts defined in the configuration profile are run.
-1. Any packages defined in the configuration profile are run.
-1. If a custom app icon has been configured for SwiftDialog, then it will be reinstalled in order to pickup this icon.
-1. Baseline deletes the LaunchDaemon, so that it is not loaded again after a restart.
-1. The entire directory `/usr/local/Baseline` is deleted.
-1. The user is presented with a simple message indicating whether everything went smoothly or if there were errors. This message has a timer (default 30 seconds for success, 5 minutes if any items had an error.)
-1. After the timer the device forcibly restarts via `shutdown -r now`
+2. Any packages defined inthe configuration profile are run.
+3. Any scripts defined in the configuration profile are run.
+4. If a custom app icon has been configured for SwiftDialog, then it will be reinstalled in order to pickup this icon.
+5. Baseline deletes the LaunchDaemon, so that it is not loaded again after a restart.
+6. The entire directory `/usr/local/Baseline` is deleted.
+7. The user is presented with a simple message indicating whether everything went smoothly or if there were errors. This message has a timer (default 30 seconds for success, 5 minutes if any items had an error.)
+8. After the timer the device forcibly restarts via `shutdown -r now`
 
 ### Additional Info
 
