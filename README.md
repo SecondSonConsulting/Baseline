@@ -43,6 +43,7 @@ Baseline was designed to be run in any way you may need:
 - Install the package during automated device enrollment or any other trigger you see fit
 - Guide your users to run the package via Self-Service
 - Run it manually like any other package
+- Copy the script and initiate it directly
 
 ### Files and Folders
 All files are deleted upon completion, with the exception of the logs.
