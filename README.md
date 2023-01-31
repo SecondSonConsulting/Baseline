@@ -87,7 +87,7 @@ Example Installomator configurations:
     </dict>
     <dict>
         <key>DisplayName</key>
-        <string>Microsoft Office 365</string>
+        <string>Desktoppr</string>
         <key>Label</key>
         <string>valuesfromarguments</string>
         <key>Arguments</key>
