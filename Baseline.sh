@@ -1,6 +1,6 @@
 #!/bin/zsh
 set -x
-#dryRun=1
+dryRun=1
 
 #   Written by Trevor Sysock of Second Son Consulting
 #   @BigMacAdmin on the MacAdmins Slack
@@ -41,6 +41,7 @@ successDialogIcon="$dialogIcon"
 successDialogAdditionalOptions=(
     --blurscreen
 )
+
 successDialogRestartButtonText="Restart Now"
 
 #Variables for our Failure Completion Dialog window
@@ -51,6 +52,7 @@ failureDialogAdditionalOptions=(
     --blurscreen
     --height 550
 )
+
 failureDialogRestartButtonText="Restart Now"
 
 #Default Installomator Options
@@ -83,6 +85,7 @@ installomatorPath="/usr/local/Installomator/Installomator.sh"
 
 #Other stuff
 dialogCommandFile=$(mktemp /var/tmp/baselineDialog.XXXXXX)
+expectedDialogTeamID="PWA5E9TQ59"
 
 ########################################################################################################
 ########################################################################################################
@@ -244,27 +247,30 @@ function install_dialog()
     # Check for Dialog and install if not found. We'll try 10 times before exiting the script with a fail.
     dialogInstallAttempts=0
     while [ ! -e "$dialogAppPath" ] && [ "$dialogInstallAttempts" -lt 10 ]; do
-        # If Installomator is already here, just use that
-        if [ -e "$installomatorPath" ]; then
+        # If SwiftDialog.pkg exists in the Packages folder check the TeamID is valid, and install it
+        localDialogTeamID=$(/usr/sbin/spctl -a -vv -t install "$BaselinePackages/SwiftDialog.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
+        if [ "$expectedDialogTeamID" = "$localDialogTeamID" ]; then
+                /usr/sbin/installer -pkg "$BaselinePackages/SwiftDialog.pkg" -target /  > /dev/null 2>&1
+        # If Installomator is already here use that
+        elif [ -e "$installomatorPath" ]; then
             "$installomatorPath" swiftdialog INSTALL=force BLOCKING_PROCESS_ACTION=ignore > /dev/null 2>&1
         else
             # Get the URL of the latest PKG From the Dialog GitHub repo
             # Expected Team ID of the downloaded PKG
             dialogURL=$(curl --silent --fail "https://api.github.com/repos/bartreardon/swiftDialog/releases/latest" | awk -F '"' "/browser_download_url/ && /pkg\"/ { print \$4; exit }")
-            expectedDialogTeamID="PWA5E9TQ59"
             log_message "Dialog not found. Installing."
             # Create temporary working directory
             workDirectory=$( /usr/bin/basename "$0" )
             tempDirectory=$( /usr/bin/mktemp -d "/private/tmp/$workDirectory.XXXXXX" )
             # Download the installer package
-            /usr/bin/curl --location --silent "$dialogURL" -o "$tempDirectory/Dialog.pkg"
+            /usr/bin/curl --location --silent "$dialogURL" -o "$tempDirectory/SwiftDialog.pkg"
             # Verify the download
-            teamID=$(/usr/sbin/spctl -a -vv -t install "$tempDirectory/Dialog.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
+            teamID=$(/usr/sbin/spctl -a -vv -t install "$tempDirectory/SwiftDialog.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
             # Install the package if Team ID validates
             if [ "$expectedDialogTeamID" = "$teamID" ]; then
-                /usr/sbin/installer -pkg "$tempDirectory/Dialog.pkg" -target /  > /dev/null 2>&1
-                dialogInstallExitCode=$?
+                /usr/sbin/installer -pkg "$tempDirectory/SwiftDialog.pkg" -target /  > /dev/null 2>&1
             fi
+            #If Dialog wasn't installed, wait 5 seconds and increase the attempt count
             if [ ! -e "$dialogAppPath" ]; then
                 log_message "Dialog installation failed."
                 sleep 5
@@ -414,16 +420,22 @@ function process_installomator_labels()
     done
 }
 
-function build_script_arrays()
+function build_dialog_array()
 {
+    ## Usage: Build the dialog array for the given profile configuration key. $1 is the name of the key
+    ## Example: build_dialog_array Scripts | InitialScripts | Packages | Installomator
+
+    # Set the MDM key to the given argument
+    configKey="${1}"
+
     #Set an index internal to this function
     index=0
     #Loop through and test if there is a value in the slot of this index for the given array
     #If this command fails it means we've reached the end of the array in the config file and we exit our loop
 
-    while $pBuddy -c "Print :Scripts:${index}" "$BaselineConfig" > /dev/null 2>&1; do
+    while $pBuddy -c "Print :$configKey:${index}" "$BaselineConfig" > /dev/null 2>&1; do
         #Get the Display Name of the current item
-        currentDisplayName=$($pBuddy -c "Print :Scripts:${index}:DisplayName" "$BaselineConfig")
+        currentDisplayName=$($pBuddy -c "Print :$configKey:${index}:DisplayName" "$BaselineConfig")
         dialogList+="$currentDisplayName"
         #Done looping. Increase our array value and loop again.
         index=$((index+1))
@@ -432,12 +444,14 @@ function build_script_arrays()
 
 function process_scripts()
 {
+# Usage: process_scripts ProfileKey
+# Actual use: process_scripts [ InitialScripts | Scripts ]
 
     #Set an index internal to this function
     currentIndex=0
     #Loop through and test if there is a value in the slot of this index for the given array
     #If this command fails it means we've reached the end of the array in the config file (or there are none) and we exit our loop
-    while $pBuddy -c "Print :Scripts:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
+    while $pBuddy -c "Print :${1}:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
         #Unset variables for next loop
         unset expectedMD5
         unset actualMD5
@@ -448,9 +462,9 @@ function process_scripts()
         unset currentDisplayName
         unset scriptDownloadExitCode
         #Get the display name of the label we're installing. We need this to update the dialog list
-        currentDisplayName=$($pBuddy -c "Print :Scripts:${currentIndex}:DisplayName" "$BaselineConfig")
+        currentDisplayName=$($pBuddy -c "Print :${1}:${currentIndex}:DisplayName" "$BaselineConfig")
         #Set the current script name
-        currentScriptPath=$($pBuddy -c "Print :Scripts:${currentIndex}:ScriptPath" "$BaselineConfig")
+        currentScriptPath=$($pBuddy -c "Print :${1}:${currentIndex}:ScriptPath" "$BaselineConfig")
         #Check if the defined script is a remote path
         if [[ ${currentScriptPath:0:4} == "http" ]]; then
             #Set variable to the base file name to be downloaded
@@ -489,10 +503,10 @@ function process_scripts()
             continue
         fi
         #Check for MD5 validation
-        if $pBuddy -c "Print :Scripts:${currentIndex}:MD5" "$BaselineConfig" > /dev/null 2>&1; then
+        if $pBuddy -c "Print :${1}:${currentIndex}:MD5" "$BaselineConfig" > /dev/null 2>&1; then
             #This script has MD5 validation provided
             #Read the expected MD5 value from the profile
-            expectedMD5=$($pBuddy -c "Print :Scripts:${currentIndex}:MD5" "$BaselineConfig")
+            expectedMD5=$($pBuddy -c "Print :${1}:${currentIndex}:MD5" "$BaselineConfig")
             #Calculate the actual MD5 of the script
             actualMD5=$(md5 -q "$currentScript")
             #Evaluate whether the expected and actual MD5 do not match
@@ -508,9 +522,9 @@ function process_scripts()
             fi
         fi
         #Check if there are Arguments defined, and set the variable accordingly
-        if $pBuddy -c "Print :Scripts:${currentIndex}:Arguments" "$BaselineConfig" > /dev/null 2>&1; then
+        if $pBuddy -c "Print :${1}:${currentIndex}:Arguments" "$BaselineConfig" > /dev/null 2>&1; then
             #This script has arguments defined
-            currentArguments=$($pBuddy -c "Print :Scripts:${currentIndex}:Arguments" "$BaselineConfig")
+            currentArguments=$($pBuddy -c "Print :${1}:${currentIndex}:Arguments" "$BaselineConfig")
         else
             #This script does not have arguments defined
             currentArguments=""
@@ -838,38 +852,41 @@ pkgsToInstall=()
 pkgValidations=()
 
 # Build dialogList array by reading our configuration and looping through things
-build_installomator_array
 
-build_pkg_arrays
-
-build_script_arrays
-
+build_dialog_array InitialScripts
+build_dialog_array Installomator
+build_dialog_array Scripts
+build_dialog_array Packages
 
 ##################################
 #   Draw our dialog list window  #
 ##################################
 build_dialog_list_options
 
-#Create our initial Dialog Window
-$dialogPath \
---title "$dialogTitle" \
---message "$dialogMessage" \
---icon "$dialogIcon" \
-${dialogAdditionalOptions[@]} \
---button1disabled \
---commandfile "$dialogCommandFile" \
---quitkey "]" \
-${dialogListOptions[@]} \
-& sleep 1
+#Create our initial Dialog Window. Do this in an "until" loop, in case it fails to launch for some reason
+until pgrep -q -x "Dialog"; do
+    $dialogPath \
+    --title "$dialogTitle" \
+    --message "$dialogMessage" \
+    --icon "$dialogIcon" \
+    ${dialogAdditionalOptions[@]} \
+    --button1disabled \
+    --commandfile "$dialogCommandFile" \
+    --quitkey "]" \
+    ${dialogListOptions[@]} \
+    & sleep 1
+done
 
 #########################
 #   Install the things  #
 #########################
+process_scripts InitialScripts
+
 process_installomator_labels
 
 process_pkgs
 
-process_scripts
+process_scripts Scripts
 
 #Check if we have a custom Dialog.app icon waiting to process. If yes, reinstall dialog
 if [ -e "/Library/Application Support/Dialog/Dialog.png" ]; then
