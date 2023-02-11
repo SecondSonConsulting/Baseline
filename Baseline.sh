@@ -58,6 +58,7 @@ failureDialogRestartButtonText="Restart Now"
 #Default Installomator Options
 defaultInstallomatorOptions=(
     BLOCKING_PROCESS_ACTION=kill
+    NOTIFY=silent
 )
 
 if [ "$dryRun" = 1 ]; then
@@ -76,6 +77,7 @@ BaselinePath="$BaselineDir/Baseline.sh"
 BaselineScripts="$BaselineDir/Scripts"
 BaselinePackages="$BaselineDir/Packages"
 BaselineLaunchDaemon="/Library/LaunchDaemons/com.secondsonconsulting.baseline.plist"
+ScriptOutputLog="/var/log/Baseline-ScriptsOutput.log"
 
 #Binaries
 pBuddy="/usr/libexec/PlistBuddy"
@@ -253,7 +255,7 @@ function install_dialog()
                 /usr/sbin/installer -pkg "$BaselinePackages/SwiftDialog.pkg" -target /  > /dev/null 2>&1
         # If Installomator is already here use that
         elif [ -e "$installomatorPath" ]; then
-            "$installomatorPath" swiftdialog INSTALL=force BLOCKING_PROCESS_ACTION=ignore > /dev/null 2>&1
+            "$installomatorPath" swiftdialog INSTALL=force NOTIFY=silent > /dev/null 2>&1
         else
             # Get the URL of the latest PKG From the Dialog GitHub repo
             # Expected Team ID of the downloaded PKG
@@ -539,8 +541,9 @@ function process_scripts()
 
         #Update the dialog window so that this item shows as "pending"
         dialog_list_command "listitem: $currentDisplayName: wait"
+
         #Call our script with our desired options. Default options first, so that they can be overriden by "currentArguments"
-        "$currentScript" ${currentArgumentArray[@]} > /dev/null 2>&1
+        "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
         scriptExitCode=$?
         if [ $scriptExitCode != 0 ]; then
             report_message "Script failed to complete: $currentScript - Exit Code: $scriptExitCode"
@@ -853,15 +856,22 @@ pkgValidations=()
 
 # Build dialogList array by reading our configuration and looping through things
 
-build_dialog_array InitialScripts
+#build_dialog_array InitialScripts
 build_dialog_array Installomator
-build_dialog_array Scripts
 build_dialog_array Packages
+build_dialog_array Scripts
+
+build_dialog_list_options
+
+##############################
+#   Process Initial Scripts  #
+##############################
+
+process_scripts InitialScripts
 
 ##################################
 #   Draw our dialog list window  #
 ##################################
-build_dialog_list_options
 
 #Create our initial Dialog Window. Do this in an "until" loop, in case it fails to launch for some reason
 until pgrep -q -x "Dialog"; do
@@ -880,7 +890,6 @@ done
 #########################
 #   Install the things  #
 #########################
-process_scripts InitialScripts
 
 process_installomator_labels
 

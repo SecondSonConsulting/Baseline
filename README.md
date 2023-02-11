@@ -24,19 +24,21 @@ Once the primary script is run, the following sequence occurs:
 1. The latest version of SwiftDialog is installed.
 1. Baseline then waits until an active end user is logged in on the device.
     1. This process does not have a timeout and will continue to wait until a user has logged into the device.
-1. When a valid user is identified a SwiftDialog progress list will show each item as its processed.
+1. When a valid user is identified `InitialScripts` are processed.
+    1. There is no SwiftDialog component to `InitialScripts`. This is where you can customize your welcome experience to suit your use case.
+1. Once `InitialScripts` are completed, a SwiftDialog progress list will show each additional item as it is processed.
 1. Installomator is used to process any labels defined in the configuration profile
 2. Any packages defined inthe configuration profile are run.
 3. Any scripts defined in the configuration profile are run.
 4. If a custom app icon has been configured for SwiftDialog, then it will be reinstalled in order to pickup this icon.
 5. Baseline deletes the LaunchDaemon, so that it is not loaded again after a restart.
 6. The entire directory `/usr/local/Baseline` is deleted.
-7. The user is presented with a simple message indicating whether everything went smoothly or if there were errors. This message has a timer (default 30 seconds for success, 5 minutes if any items had an error.)
+7. The user is presented with a simple message indicating whether everything went smoothly or if there were errors. This message has a timer.
 8. After the timer the device forcibly restarts via `shutdown -r now`
 
 ### Additional Info
 
-Baseline uses the `--blurscreen` SwiftDialog feature to prevent user access during the setup process. There is an optional "escape" key to close the Dialog windows using `CMD+]`. Using this escape key does not stop Baseline from running, it simply closes the Dialog window. 
+Baseline uses the `--blurscreen` SwiftDialog feature to prevent user access during the setup process. There is an optional "escape" key to close the Dialog windows using `CMD+]`. Using this escape key does not stop Baseline from running, it only closes the Dialog window. 
 
 ### How to Initiate it
 Baseline was designed to be run in any way you may need:
@@ -62,8 +64,13 @@ The full script output can be found at `/var/log/Baseline/DaemonOutput.log`
 
 # Configuration Profile
 Baseline performs actions based on a configuration profile delivered via MDM or manually installed. The top level keys in the profile are arrays with dictionaries defined beneath them.
+## Currently Supported Keys
+- `<InitialScripts>`
+- `<Installomator>`
+- `<Packages>`
+- `<Scripts>`
 
-## Defining Installomator Labels
+## Defining `Installomator` Labels
 
 By default, Baseline runs Installomator labels with the following arguments:
 `BLOCKING_PROCESS_ACTION=kill`
@@ -96,7 +103,7 @@ Example Installomator configurations:
 </array>
 ```
 
-## Defining Packages
+## Defining `Packages`
 Required arguments for Packages:
 - `<DisplayName>` : The human facing name of this item
 - `<PackagePath>` : The path to the package to be installed. The path can be defined in three ways
@@ -109,7 +116,7 @@ Optional arguments for Packages:
 - `<MD5>` : Use this to define the expected md5 hash to ensure the integrity of your package.
 - `<Arguments>` : In the rare cases a .pkg has additional arguments you wish to pass through the `installer` command, you can do so using this key.
 
-## Define Scripts
+## Define `Scripts`
 Required arguments for Scripts:
 - `<DisplayName>` : The human facing name of this item
 - `<ScriptPath>` : The path to the script to be installed. The path can be defined in three ways
@@ -135,6 +142,13 @@ Optional arguments for Scripts:
     </dict>
 </array>
 ```
+
+## Define `InitialScripts`
+    - InitialScripts are processed by the same function as `Scripts` and thus have the same requirements and features.
+    - InitialScripts are run immediately upon a confirmed end user login, and prior to the main Dialog list.
+    - There is no SwiftDialog window open while Initial Scripts are being processed. This means admins are welcome to create their own custom SwiftDialog experience with branding and messaging as you see fit.
+    - It is recommended that Initial Scripts call a dialog window with the `--blurscreen` and `--ontop` options to match the defaults used in the main Baseline script.
+
 ## Using iMazing Profile Editor
 Currently Baseline is not included in the iMazing Profile Editor default repository, when a full release is announced a pull request will be made to make this happen.
 For now, you can utilize iMazing by downloading the plist file in the "Profile Manifest" folder of this Github repo and then following the "Simple customization" instructions to get it in place on your workstation: https://imazing.com/guides/imazing-profile-editor-working-with-custom-preference-manifests
