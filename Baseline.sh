@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="v.0.5.0"
+scriptVersion="v.0.5.1"
 
 ########################################################################################################
 ########################################################################################################
@@ -246,7 +246,7 @@ function install_dialog()
                 /usr/sbin/installer -pkg "$BaselinePackages/SwiftDialog.pkg" -target /  > /dev/null 2>&1
         # If Installomator is already here use that
         elif [ -e "$installomatorPath" ]; then
-            "$installomatorPath" swiftdialog INSTALL=force NOTIFY=silent > /dev/null 2>&1
+            "$installomatorPath" swiftdialog INSTALL=force NOTIFY=silent BLOCKING_PROCESS_ACTION=ignore > /dev/null 2>&1
             dialogInstallAttempts=$((dialogInstallAttempts+1))
         else
             # Get the URL of the latest PKG From the Dialog GitHub repo
