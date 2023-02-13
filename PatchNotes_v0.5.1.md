@@ -5,3 +5,4 @@
     - Initiated immediately upon a confirmed end user login, and prior to the main Dialog list.
     - There is no SwiftDialog window open while Initial Scripts are being processed. This means admins are welcome to create their own custom SwiftDialog experience with branding and messaging as you see fit.
     - It is recommended that Initial Scripts call a dialog window with the `--blurscreen` and `--ontop` options to match the defaults used in the main Baseline script.
+- Fixed a logic loop where Baseline would never exit if SwiftDialog wasn't installed successfully with Installomator.

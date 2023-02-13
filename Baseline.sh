@@ -1,6 +1,6 @@
 #!/bin/zsh
 set -x
-dryRun=1
+#dryRun=1
 
 #   Written by Trevor Sysock of Second Son Consulting
 #   @BigMacAdmin on the MacAdmins Slack
@@ -227,15 +227,6 @@ function no_sleeping()
 
 # execute a dialog command
 function dialog_command(){
-#    debug_message "DIALOGCMD: $@"
-    /bin/echo "$@"  >> $dialogCommandFile
-    sleep .1
-}
-
-# execute a dialog command
-function dialog_list_command()
-{
-    #    debug_message "DIALOGCMD: $@"
     /bin/echo "$@"  >> $dialogCommandFile
     sleep .1
 }
@@ -256,6 +247,7 @@ function install_dialog()
         # If Installomator is already here use that
         elif [ -e "$installomatorPath" ]; then
             "$installomatorPath" swiftdialog INSTALL=force NOTIFY=silent > /dev/null 2>&1
+            dialogInstallAttempts=$((dialogInstallAttempts+1))
         else
             # Get the URL of the latest PKG From the Dialog GitHub repo
             # Expected Team ID of the downloaded PKG
@@ -405,17 +397,17 @@ function process_installomator_labels()
         #Get the display name of the label we're installing. We need this to update the dialog list
         currentDisplayName=$($pBuddy -c "Print :Installomator:${currentIndex}:DisplayName" "$BaselineConfig")
         #Update the dialog window so that this item shows as "pending"
-        dialog_list_command "listitem: $currentDisplayName: wait"
+        dialog_command "listitem: $currentDisplayName: wait"
         #Call installomator with our desired options. Default options first, so that they can be overriden by "currentArguments"
         $installomatorPath $currentLabel ${defaultInstallomatorOptions[@]} $currentArguments > /dev/null 2>&1
         installomatorExitCode=$?
         if [ $installomatorExitCode != 0 ]; then
             report_message "Installomator failed to install: $currentLabel - Exit Code: $installomatorExitCode"
-            dialog_list_command "listitem: $currentDisplayName: fail"
+            dialog_command "listitem: $currentDisplayName: fail"
             failList+=("$currentDisplayName")
         else
             report_message "Installomator successfully installed: $currentLabel"
-            dialog_list_command "listitem: $currentDisplayName: success"
+            dialog_command "listitem: $currentDisplayName: success"
             successList+=("$currentDisplayName")
        fi
         currentIndex=$((currentIndex+1))
@@ -499,7 +491,7 @@ function process_scripts()
             # Iterate the index up one
             currentIndex=$((currentIndex+1))
             # Report the fail
-            dialog_list_command "listitem: $currentDisplayName: fail"
+            dialog_command "listitem: $currentDisplayName: fail"
             failList+=("$currentDisplayName")
             # Bail this pass through the while loop and continue processing next item
             continue
@@ -517,7 +509,7 @@ function process_scripts()
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 # Report the fail
-                dialog_list_command "listitem: $currentDisplayName: fail"
+                dialog_command "listitem: $currentDisplayName: fail"
                 failList+=("$currentDisplayName")
                 # Bail this pass through the while loop and continue processing next item
                 continue
@@ -540,18 +532,18 @@ function process_scripts()
         fi
 
         #Update the dialog window so that this item shows as "pending"
-        dialog_list_command "listitem: $currentDisplayName: wait"
+        dialog_command "listitem: $currentDisplayName: wait"
 
         #Call our script with our desired options. Default options first, so that they can be overriden by "currentArguments"
         "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
         scriptExitCode=$?
         if [ $scriptExitCode != 0 ]; then
             report_message "Script failed to complete: $currentScript - Exit Code: $scriptExitCode"
-            dialog_list_command "listitem: $currentDisplayName: fail"
+            dialog_command "listitem: $currentDisplayName: fail"
             failList+=("$currentDisplayName")
         else
             report_message "Script completed successfully: $currentScript"
-            dialog_list_command "listitem: $currentDisplayName: success"
+            dialog_command "listitem: $currentDisplayName: success"
             successList+=("$currentDisplayName")
        fi
 
@@ -625,7 +617,7 @@ function process_pkgs()
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 # Report the fail
-                dialog_list_command "listitem: $currentDisplayName: fail"
+                dialog_command "listitem: $currentDisplayName: fail"
                 # Bail this pass through the while loop and continue processing next item
                 continue
             else
@@ -644,7 +636,7 @@ function process_pkgs()
             currentPKG="$BaselinePackages/$currentPKGPath"
         else
             report_message "Package not found $currentPKGPath"
-            dialog_list_command "listitem: $currentDisplayName: fail"
+            dialog_command "listitem: $currentDisplayName: fail"
             failList+=("$currentDisplayName")
             currentIndex=$((currentIndex+1))
             continue
@@ -681,7 +673,7 @@ function process_pkgs()
             expectedMD5=""
         fi
         #Update the dialog window so that this item shows as "pending"
-        dialog_list_command "listitem: $currentDisplayName: wait"
+        dialog_command "listitem: $currentDisplayName: wait"
         
         ## Package validation happens here
         # Check TeamID, if a value has been provided
@@ -691,12 +683,12 @@ function process_pkgs()
             # Check if actual does not match expected
             if [ "$expectedTeamID" != "$actualTeamID" ]; then
                 report_message "TeamID validation of PKG failed: $currentPKG - Expected: $expectedTeamID Actual: $actualTeamID"
-                dialog_list_command "listitem: $currentDisplayName: fail"
+                dialog_command "listitem: $currentDisplayName: fail"
                 failList+=("$currentDisplayName")
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 # Report the fail
-                dialog_list_command "listitem: $currentDisplayName: fail"
+                dialog_command "listitem: $currentDisplayName: fail"
                 # Bail this pass through the while loop and continue processing next item
                 continue
             else
@@ -711,12 +703,12 @@ function process_pkgs()
             # Check if actual does not match expected
             if [ "$expectedMD5" != "$actualMD5" ]; then
                 report_message "MD5 validation of PKG failed: $currentPKG - Expected: $expectedMD5 Actual: $actualMD5"
-                dialog_list_command "listitem: $currentDisplayName: fail"
+                dialog_command "listitem: $currentDisplayName: fail"
                 failList+=("$currentDisplayName")
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 # Report the fail
-                dialog_list_command "listitem: $currentDisplayName: fail"
+                dialog_command "listitem: $currentDisplayName: fail"
                 # Bail this pass through the while loop and continue processing next item
                 continue
             else
@@ -731,11 +723,11 @@ function process_pkgs()
         # Verify the install completed successfully
         if [ $pkgExitCode != 0 ]; then
             report_message "Package failed to complete: $currentPKG - Exit Code: $pkgExitCode"
-            dialog_list_command "listitem: $currentDisplayName: fail"
+            dialog_command "listitem: $currentDisplayName: fail"
             failList+=("$currentDisplayName")
         else
             report_message "Package completed successfully: $currentPKG"
-            dialog_list_command "listitem: $currentDisplayName: success"
+            dialog_command "listitem: $currentDisplayName: success"
             successList+=("$currentDisplayName")
         fi
         debug_message "Output of the install package command: $pkgInstallerOutput"
@@ -899,11 +891,11 @@ process_scripts Scripts
 
 #Check if we have a custom Dialog.app icon waiting to process. If yes, reinstall dialog
 if [ -e "/Library/Application Support/Dialog/Dialog.png" ]; then
-    dialog_list_command "listitem: add, title: Finishing up"
-    dialog_list_command "listitem: Finishing up: wait"
+    dialog_command "listitem: add, title: Finishing up"
+    dialog_command "listitem: Finishing up: wait"
     rm_if_exists "$dialogAppPath"
     install_dialog
-    dialog_list_command "listitem: Finishing up: success"
+    dialog_command "listitem: Finishing up: success"
 fi
 
 if [ "$dryRun" = 1 ]; then
