@@ -21,51 +21,6 @@ if [ "${1}" = '--version' ]; then
     exit 0
 fi
 
-#######################
-#   Customizations    #
-#######################
-#Variables for our primary Dialog window
-dialogTitle="Your computer setup is underway"
-dialogMessage="Feel free to step away, this could take 30 minutes or more. \n\nYour computer will restart when it's ready for use."
-dialogIcon="/System/Library/CoreServices/Erase Assistant.app"
-dialogAdditionalOptions=(
-    --blurscreen
-    --width 900
-    --height 550
-)
-
-#Variables for our Successful Completion Dialog window
-successDialogTitle="Your computer setup is complete"
-successDialogMessage="Your device needs to restart before you can begin use."
-successDialogIcon="$dialogIcon"
-successDialogAdditionalOptions=(
-    --blurscreen
-)
-
-successDialogRestartButtonText="Restart Now"
-
-#Variables for our Failure Completion Dialog window
-failureDialogTitle="Your computer setup is complete"
-failureDialogMessage="Your computer setup is complete, however not everything was installed as expected. Review the list below, and contact IT if you need assistance."
-failureDialogIcon="$dialogIcon"
-failureDialogAdditionalOptions=(
-    --blurscreen
-    --height 550
-)
-
-failureDialogRestartButtonText="Restart Now"
-
-#Default Installomator Options
-defaultInstallomatorOptions=(
-    BLOCKING_PROCESS_ACTION=kill
-    NOTIFY=silent
-)
-
-if [ "$dryRun" = 1 ]; then
-    defaultInstallomatorOptions+="DEBUG=2"
-fi
-
-
 #################################
 #   Declare file/folder paths   #
 #################################
@@ -88,6 +43,72 @@ installomatorPath="/usr/local/Installomator/Installomator.sh"
 #Other stuff
 dialogCommandFile=$(mktemp /var/tmp/baselineDialog.XXXXXX)
 expectedDialogTeamID="PWA5E9TQ59"
+
+# Set variable for whether or not we'll force a restart. Defaults to 'true'
+forceRestartSetting=$($pBuddy -c "Print :Restart" "$BaselineConfig")
+
+if  [ $forceRestartSetting = "false" ]; then
+    forceRestart="false"
+else
+    forceRestart="true"
+fi
+
+#######################
+#   Customizations    #
+#######################
+
+#Variables for our primary Dialog window
+dialogTitle="Your computer setup is underway"
+dialogMessage="Feel free to step away, this could take 30 minutes or more. \n\nYour computer will restart when it's ready for use."
+dialogIcon="/System/Library/CoreServices/Erase Assistant.app"
+dialogAdditionalOptions=(
+    --blurscreen
+    --width 900
+    --height 550
+)
+
+#Variables for our Successful Completion Dialog window
+successDialogTitle="Your computer setup is complete"
+successDialogIcon="$dialogIcon"
+successDialogAdditionalOptions=(
+    --blurscreen
+)
+
+if [ $forceRestart = "true" ];then
+    successDialogMessage="Your device needs to restart before you can begin use."
+    successDialogRestartButtonText="Restart Now"
+    successDialogAdditionalOptions+=(--timer 120)
+else
+    successDialogMessage="Your device is ready for you."
+    successDialogRestartButtonText="Ok"
+fi
+
+#Variables for our Failure Completion Dialog window
+failureDialogTitle="Your computer setup is complete"
+failureDialogMessage="Your computer setup is complete, however not everything was installed as expected. Review the list below, and contact IT if you need assistance."
+failureDialogIcon="$dialogIcon"
+failureDialogAdditionalOptions=(
+    --blurscreen
+    --height 550
+)
+
+if [ $forceRestart = "true" ];then
+    failureDialogRestartButtonText="Restart Now"
+    failureDialogAdditionalOptions+=(--timer 300)
+else
+    failureDialogRestartButtonText="Ok"
+fi
+
+#Default Installomator Options
+defaultInstallomatorOptions=(
+    BLOCKING_PROCESS_ACTION=kill
+    NOTIFY=silent
+)
+
+if [ "$dryRun" = 1 ]; then
+    defaultInstallomatorOptions+="DEBUG=2"
+fi
+
 
 ########################################################################################################
 ########################################################################################################
@@ -194,27 +215,36 @@ function cleanup_and_exit()
     exit "$1"
 }
 
+# This function doesn't always shut down, but I'm leaving the name in place for now at least.
+# Usage: cleanup_and_exit 'exitcode' 'exit message'
 function cleanup_and_restart()
 {
     log_message "Exiting: $2"
+    # Delete the LaunchDaemon. Saw an edge case where it didn't delete once, so I made it a while loop.
     while [ -e "$BaselineLaunchDaemon" ]; do
         rm_if_exists "$BaselineLaunchDaemon"
         sleep 1
     done
+    # Kill our caffeinate command
     kill "$caffeinatepid"
-    pkill caffeinate 
-    dialog_command "quit:" 
+    # Close dialog window
+    dialog_command "quit:"
+    # Delete dialog command file 
     rm_if_exists "$dialogCommandFile"
-    rm_if_exists "$scriptPath"
   
     # If this isn't a test run, force a restart
-    if [ "$dryRun" != 1 ]; then
+    if [ $forceRestart = "false" ]; then
         rm_if_exists "$BaselineDir"
-        shutdown -r now
+        echo "Force Restart is set to false. Exiting"
+        exit "$1"
+    elif [ "$dryRun" = 1 ]; then
+        echo "this is where <shutdown -r now> would go"
+        exit "$1"
     fi
-    #Everything below here in this function is for testing/debugging
-    echo "this is where <shutdown -r now> would go"
-    exit "$1"
+
+    # Shutting down
+    rm_if_exists "$BaselineDir"
+    shutdown -r now
 }
 
 function no_sleeping()
@@ -915,7 +945,6 @@ if [ -z "$failList" ]; then
     --icon "$successDialogIcon" \
     --button1text "$successDialogRestartButtonText" \
     ${successDialogAdditionalOptions[@]} \
-    --timer 120
 
     cleanup_and_restart
 else
@@ -932,7 +961,6 @@ else
     --button1text "$failureDialogRestartButtonText" \
     ${failureDialogAdditionalOptions[@]} \
     ${failListItems[@]} \
-    --timer 300
 
     cleanup_and_restart
 fi
