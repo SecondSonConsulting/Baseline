@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="v.0.5.0"
+scriptVersion="v.0.5.1"
 
 ########################################################################################################
 ########################################################################################################
@@ -21,9 +21,42 @@ if [ "${1}" = '--version' ]; then
     exit 0
 fi
 
+#################################
+#   Declare file/folder paths   #
+#################################
+#Baseline files/folders
+BaselineConfig="/Library/Managed Preferences/com.secondsonconsulting.baseline.plist"
+BaselineDir="/usr/local/Baseline"
+logFile="/var/log/Baseline.log"
+BaselinePath="$BaselineDir/Baseline.sh"
+BaselineScripts="$BaselineDir/Scripts"
+BaselinePackages="$BaselineDir/Packages"
+BaselineLaunchDaemon="/Library/LaunchDaemons/com.secondsonconsulting.baseline.plist"
+ScriptOutputLog="/var/log/Baseline-ScriptsOutput.log"
+
+#Binaries
+pBuddy="/usr/libexec/PlistBuddy"
+dialogPath="/usr/local/bin/dialog"
+dialogAppPath="/Library/Application Support/Dialog/Dialog.app"
+installomatorPath="/usr/local/Installomator/Installomator.sh"
+
+#Other stuff
+dialogCommandFile=$(mktemp /var/tmp/baselineDialog.XXXXXX)
+expectedDialogTeamID="PWA5E9TQ59"
+
+# Set variable for whether or not we'll force a restart. Defaults to 'true'
+forceRestartSetting=$($pBuddy -c "Print :Restart" "$BaselineConfig")
+
+if  [ $forceRestartSetting = "false" ]; then
+    forceRestart="false"
+else
+    forceRestart="true"
+fi
+
 #######################
 #   Customizations    #
 #######################
+
 #Variables for our primary Dialog window
 dialogTitle="Your computer setup is underway"
 dialogMessage="Feel free to step away, this could take 30 minutes or more. \n\nYour computer will restart when it's ready for use."
@@ -36,12 +69,19 @@ dialogAdditionalOptions=(
 
 #Variables for our Successful Completion Dialog window
 successDialogTitle="Your computer setup is complete"
-successDialogMessage="Your device needs to restart before you can begin use."
 successDialogIcon="$dialogIcon"
 successDialogAdditionalOptions=(
     --blurscreen
 )
-successDialogRestartButtonText="Restart Now"
+
+if [ $forceRestart = "true" ];then
+    successDialogMessage="Your device needs to restart before you can begin use."
+    successDialogRestartButtonText="Restart Now"
+    successDialogAdditionalOptions+=(--timer 120)
+else
+    successDialogMessage="Your device is ready for you."
+    successDialogRestartButtonText="Ok"
+fi
 
 #Variables for our Failure Completion Dialog window
 failureDialogTitle="Your computer setup is complete"
@@ -51,38 +91,24 @@ failureDialogAdditionalOptions=(
     --blurscreen
     --height 550
 )
-failureDialogRestartButtonText="Restart Now"
+
+if [ $forceRestart = "true" ];then
+    failureDialogRestartButtonText="Restart Now"
+    failureDialogAdditionalOptions+=(--timer 300)
+else
+    failureDialogRestartButtonText="Ok"
+fi
 
 #Default Installomator Options
 defaultInstallomatorOptions=(
     BLOCKING_PROCESS_ACTION=kill
+    NOTIFY=silent
 )
 
 if [ "$dryRun" = 1 ]; then
     defaultInstallomatorOptions+="DEBUG=2"
 fi
 
-
-#################################
-#   Declare file/folder paths   #
-#################################
-#Baseline files/folders
-BaselineConfig="/Library/Managed Preferences/com.secondsonconsulting.baseline.plist"
-BaselineDir="/usr/local/Baseline"
-logFile="/var/log/Baseline.log"
-BaselinePath="$BaselineDir/Baseline.sh"
-BaselineScripts="$BaselineDir/Scripts"
-BaselinePackages="$BaselineDir/Packages"
-BaselineLaunchDaemon="/Library/LaunchDaemons/com.secondsonconsulting.baseline.plist"
-
-#Binaries
-pBuddy="/usr/libexec/PlistBuddy"
-dialogPath="/usr/local/bin/dialog"
-dialogAppPath="/Library/Application Support/Dialog/Dialog.app"
-installomatorPath="/usr/local/Installomator/Installomator.sh"
-
-#Other stuff
-dialogCommandFile=$(mktemp /var/tmp/baselineDialog.XXXXXX)
 
 ########################################################################################################
 ########################################################################################################
@@ -189,27 +215,36 @@ function cleanup_and_exit()
     exit "$1"
 }
 
+# This function doesn't always shut down, but I'm leaving the name in place for now at least.
+# Usage: cleanup_and_exit 'exitcode' 'exit message'
 function cleanup_and_restart()
 {
     log_message "Exiting: $2"
+    # Delete the LaunchDaemon. Saw an edge case where it didn't delete once, so I made it a while loop.
     while [ -e "$BaselineLaunchDaemon" ]; do
         rm_if_exists "$BaselineLaunchDaemon"
         sleep 1
     done
+    # Kill our caffeinate command
     kill "$caffeinatepid"
-    pkill caffeinate 
-    dialog_command "quit:" 
+    # Close dialog window
+    dialog_command "quit:"
+    # Delete dialog command file 
     rm_if_exists "$dialogCommandFile"
-    rm_if_exists "$scriptPath"
   
     # If this isn't a test run, force a restart
-    if [ "$dryRun" != 1 ]; then
+    if [ $forceRestart = "false" ]; then
         rm_if_exists "$BaselineDir"
-        shutdown -r now
+        echo "Force Restart is set to false. Exiting"
+        exit "$1"
+    elif [ "$dryRun" = 1 ]; then
+        echo "this is where <shutdown -r now> would go"
+        exit "$1"
     fi
-    #Everything below here in this function is for testing/debugging
-    echo "this is where <shutdown -r now> would go"
-    exit "$1"
+
+    # Shutting down
+    rm_if_exists "$BaselineDir"
+    shutdown -r now
 }
 
 function no_sleeping()
@@ -222,15 +257,6 @@ function no_sleeping()
 
 # execute a dialog command
 function dialog_command(){
-#    debug_message "DIALOGCMD: $@"
-    /bin/echo "$@"  >> $dialogCommandFile
-    sleep .1
-}
-
-# execute a dialog command
-function dialog_list_command()
-{
-    #    debug_message "DIALOGCMD: $@"
     /bin/echo "$@"  >> $dialogCommandFile
     sleep .1
 }
@@ -244,27 +270,31 @@ function install_dialog()
     # Check for Dialog and install if not found. We'll try 10 times before exiting the script with a fail.
     dialogInstallAttempts=0
     while [ ! -e "$dialogAppPath" ] && [ "$dialogInstallAttempts" -lt 10 ]; do
-        # If Installomator is already here, just use that
-        if [ -e "$installomatorPath" ]; then
-            "$installomatorPath" swiftdialog INSTALL=force BLOCKING_PROCESS_ACTION=ignore > /dev/null 2>&1
+        # If SwiftDialog.pkg exists in the Packages folder check the TeamID is valid, and install it
+        localDialogTeamID=$(/usr/sbin/spctl -a -vv -t install "$BaselinePackages/SwiftDialog.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
+        if [ "$expectedDialogTeamID" = "$localDialogTeamID" ]; then
+                /usr/sbin/installer -pkg "$BaselinePackages/SwiftDialog.pkg" -target /  > /dev/null 2>&1
+        # If Installomator is already here use that
+        elif [ -e "$installomatorPath" ]; then
+            "$installomatorPath" swiftdialog INSTALL=force NOTIFY=silent BLOCKING_PROCESS_ACTION=ignore > /dev/null 2>&1
+            dialogInstallAttempts=$((dialogInstallAttempts+1))
         else
             # Get the URL of the latest PKG From the Dialog GitHub repo
             # Expected Team ID of the downloaded PKG
             dialogURL=$(curl --silent --fail "https://api.github.com/repos/bartreardon/swiftDialog/releases/latest" | awk -F '"' "/browser_download_url/ && /pkg\"/ { print \$4; exit }")
-            expectedDialogTeamID="PWA5E9TQ59"
             log_message "Dialog not found. Installing."
             # Create temporary working directory
             workDirectory=$( /usr/bin/basename "$0" )
             tempDirectory=$( /usr/bin/mktemp -d "/private/tmp/$workDirectory.XXXXXX" )
             # Download the installer package
-            /usr/bin/curl --location --silent "$dialogURL" -o "$tempDirectory/Dialog.pkg"
+            /usr/bin/curl --location --silent "$dialogURL" -o "$tempDirectory/SwiftDialog.pkg"
             # Verify the download
-            teamID=$(/usr/sbin/spctl -a -vv -t install "$tempDirectory/Dialog.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
+            teamID=$(/usr/sbin/spctl -a -vv -t install "$tempDirectory/SwiftDialog.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
             # Install the package if Team ID validates
             if [ "$expectedDialogTeamID" = "$teamID" ]; then
-                /usr/sbin/installer -pkg "$tempDirectory/Dialog.pkg" -target /  > /dev/null 2>&1
-                dialogInstallExitCode=$?
+                /usr/sbin/installer -pkg "$tempDirectory/SwiftDialog.pkg" -target /  > /dev/null 2>&1
             fi
+            #If Dialog wasn't installed, wait 5 seconds and increase the attempt count
             if [ ! -e "$dialogAppPath" ]; then
                 log_message "Dialog installation failed."
                 sleep 5
@@ -397,33 +427,39 @@ function process_installomator_labels()
         #Get the display name of the label we're installing. We need this to update the dialog list
         currentDisplayName=$($pBuddy -c "Print :Installomator:${currentIndex}:DisplayName" "$BaselineConfig")
         #Update the dialog window so that this item shows as "pending"
-        dialog_list_command "listitem: $currentDisplayName: wait"
+        dialog_command "listitem: $currentDisplayName: wait"
         #Call installomator with our desired options. Default options first, so that they can be overriden by "currentArguments"
         $installomatorPath $currentLabel ${defaultInstallomatorOptions[@]} $currentArguments > /dev/null 2>&1
         installomatorExitCode=$?
         if [ $installomatorExitCode != 0 ]; then
             report_message "Installomator failed to install: $currentLabel - Exit Code: $installomatorExitCode"
-            dialog_list_command "listitem: $currentDisplayName: fail"
+            dialog_command "listitem: $currentDisplayName: fail"
             failList+=("$currentDisplayName")
         else
             report_message "Installomator successfully installed: $currentLabel"
-            dialog_list_command "listitem: $currentDisplayName: success"
+            dialog_command "listitem: $currentDisplayName: success"
             successList+=("$currentDisplayName")
        fi
         currentIndex=$((currentIndex+1))
     done
 }
 
-function build_script_arrays()
+function build_dialog_array()
 {
+    ## Usage: Build the dialog array for the given profile configuration key. $1 is the name of the key
+    ## Example: build_dialog_array Scripts | InitialScripts | Packages | Installomator
+
+    # Set the MDM key to the given argument
+    configKey="${1}"
+
     #Set an index internal to this function
     index=0
     #Loop through and test if there is a value in the slot of this index for the given array
     #If this command fails it means we've reached the end of the array in the config file and we exit our loop
 
-    while $pBuddy -c "Print :Scripts:${index}" "$BaselineConfig" > /dev/null 2>&1; do
+    while $pBuddy -c "Print :$configKey:${index}" "$BaselineConfig" > /dev/null 2>&1; do
         #Get the Display Name of the current item
-        currentDisplayName=$($pBuddy -c "Print :Scripts:${index}:DisplayName" "$BaselineConfig")
+        currentDisplayName=$($pBuddy -c "Print :$configKey:${index}:DisplayName" "$BaselineConfig")
         dialogList+="$currentDisplayName"
         #Done looping. Increase our array value and loop again.
         index=$((index+1))
@@ -432,12 +468,14 @@ function build_script_arrays()
 
 function process_scripts()
 {
+# Usage: process_scripts ProfileKey
+# Actual use: process_scripts [ InitialScripts | Scripts ]
 
     #Set an index internal to this function
     currentIndex=0
     #Loop through and test if there is a value in the slot of this index for the given array
     #If this command fails it means we've reached the end of the array in the config file (or there are none) and we exit our loop
-    while $pBuddy -c "Print :Scripts:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
+    while $pBuddy -c "Print :${1}:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
         #Unset variables for next loop
         unset expectedMD5
         unset actualMD5
@@ -448,9 +486,9 @@ function process_scripts()
         unset currentDisplayName
         unset scriptDownloadExitCode
         #Get the display name of the label we're installing. We need this to update the dialog list
-        currentDisplayName=$($pBuddy -c "Print :Scripts:${currentIndex}:DisplayName" "$BaselineConfig")
+        currentDisplayName=$($pBuddy -c "Print :${1}:${currentIndex}:DisplayName" "$BaselineConfig")
         #Set the current script name
-        currentScriptPath=$($pBuddy -c "Print :Scripts:${currentIndex}:ScriptPath" "$BaselineConfig")
+        currentScriptPath=$($pBuddy -c "Print :${1}:${currentIndex}:ScriptPath" "$BaselineConfig")
         #Check if the defined script is a remote path
         if [[ ${currentScriptPath:0:4} == "http" ]]; then
             #Set variable to the base file name to be downloaded
@@ -483,16 +521,16 @@ function process_scripts()
             # Iterate the index up one
             currentIndex=$((currentIndex+1))
             # Report the fail
-            dialog_list_command "listitem: $currentDisplayName: fail"
+            dialog_command "listitem: $currentDisplayName: fail"
             failList+=("$currentDisplayName")
             # Bail this pass through the while loop and continue processing next item
             continue
         fi
         #Check for MD5 validation
-        if $pBuddy -c "Print :Scripts:${currentIndex}:MD5" "$BaselineConfig" > /dev/null 2>&1; then
+        if $pBuddy -c "Print :${1}:${currentIndex}:MD5" "$BaselineConfig" > /dev/null 2>&1; then
             #This script has MD5 validation provided
             #Read the expected MD5 value from the profile
-            expectedMD5=$($pBuddy -c "Print :Scripts:${currentIndex}:MD5" "$BaselineConfig")
+            expectedMD5=$($pBuddy -c "Print :${1}:${currentIndex}:MD5" "$BaselineConfig")
             #Calculate the actual MD5 of the script
             actualMD5=$(md5 -q "$currentScript")
             #Evaluate whether the expected and actual MD5 do not match
@@ -501,16 +539,16 @@ function process_scripts()
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 # Report the fail
-                dialog_list_command "listitem: $currentDisplayName: fail"
+                dialog_command "listitem: $currentDisplayName: fail"
                 failList+=("$currentDisplayName")
                 # Bail this pass through the while loop and continue processing next item
                 continue
             fi
         fi
         #Check if there are Arguments defined, and set the variable accordingly
-        if $pBuddy -c "Print :Scripts:${currentIndex}:Arguments" "$BaselineConfig" > /dev/null 2>&1; then
+        if $pBuddy -c "Print :${1}:${currentIndex}:Arguments" "$BaselineConfig" > /dev/null 2>&1; then
             #This script has arguments defined
-            currentArguments=$($pBuddy -c "Print :Scripts:${currentIndex}:Arguments" "$BaselineConfig")
+            currentArguments=$($pBuddy -c "Print :${1}:${currentIndex}:Arguments" "$BaselineConfig")
         else
             #This script does not have arguments defined
             currentArguments=""
@@ -524,17 +562,18 @@ function process_scripts()
         fi
 
         #Update the dialog window so that this item shows as "pending"
-        dialog_list_command "listitem: $currentDisplayName: wait"
+        dialog_command "listitem: $currentDisplayName: wait"
+
         #Call our script with our desired options. Default options first, so that they can be overriden by "currentArguments"
-        "$currentScript" ${currentArgumentArray[@]} > /dev/null 2>&1
+        "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
         scriptExitCode=$?
         if [ $scriptExitCode != 0 ]; then
             report_message "Script failed to complete: $currentScript - Exit Code: $scriptExitCode"
-            dialog_list_command "listitem: $currentDisplayName: fail"
+            dialog_command "listitem: $currentDisplayName: fail"
             failList+=("$currentDisplayName")
         else
             report_message "Script completed successfully: $currentScript"
-            dialog_list_command "listitem: $currentDisplayName: success"
+            dialog_command "listitem: $currentDisplayName: success"
             successList+=("$currentDisplayName")
        fi
 
@@ -608,7 +647,7 @@ function process_pkgs()
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 # Report the fail
-                dialog_list_command "listitem: $currentDisplayName: fail"
+                dialog_command "listitem: $currentDisplayName: fail"
                 # Bail this pass through the while loop and continue processing next item
                 continue
             else
@@ -627,7 +666,7 @@ function process_pkgs()
             currentPKG="$BaselinePackages/$currentPKGPath"
         else
             report_message "Package not found $currentPKGPath"
-            dialog_list_command "listitem: $currentDisplayName: fail"
+            dialog_command "listitem: $currentDisplayName: fail"
             failList+=("$currentDisplayName")
             currentIndex=$((currentIndex+1))
             continue
@@ -664,7 +703,7 @@ function process_pkgs()
             expectedMD5=""
         fi
         #Update the dialog window so that this item shows as "pending"
-        dialog_list_command "listitem: $currentDisplayName: wait"
+        dialog_command "listitem: $currentDisplayName: wait"
         
         ## Package validation happens here
         # Check TeamID, if a value has been provided
@@ -674,12 +713,12 @@ function process_pkgs()
             # Check if actual does not match expected
             if [ "$expectedTeamID" != "$actualTeamID" ]; then
                 report_message "TeamID validation of PKG failed: $currentPKG - Expected: $expectedTeamID Actual: $actualTeamID"
-                dialog_list_command "listitem: $currentDisplayName: fail"
+                dialog_command "listitem: $currentDisplayName: fail"
                 failList+=("$currentDisplayName")
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 # Report the fail
-                dialog_list_command "listitem: $currentDisplayName: fail"
+                dialog_command "listitem: $currentDisplayName: fail"
                 # Bail this pass through the while loop and continue processing next item
                 continue
             else
@@ -694,12 +733,12 @@ function process_pkgs()
             # Check if actual does not match expected
             if [ "$expectedMD5" != "$actualMD5" ]; then
                 report_message "MD5 validation of PKG failed: $currentPKG - Expected: $expectedMD5 Actual: $actualMD5"
-                dialog_list_command "listitem: $currentDisplayName: fail"
+                dialog_command "listitem: $currentDisplayName: fail"
                 failList+=("$currentDisplayName")
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 # Report the fail
-                dialog_list_command "listitem: $currentDisplayName: fail"
+                dialog_command "listitem: $currentDisplayName: fail"
                 # Bail this pass through the while loop and continue processing next item
                 continue
             else
@@ -714,11 +753,11 @@ function process_pkgs()
         # Verify the install completed successfully
         if [ $pkgExitCode != 0 ]; then
             report_message "Package failed to complete: $currentPKG - Exit Code: $pkgExitCode"
-            dialog_list_command "listitem: $currentDisplayName: fail"
+            dialog_command "listitem: $currentDisplayName: fail"
             failList+=("$currentDisplayName")
         else
             report_message "Package completed successfully: $currentPKG"
-            dialog_list_command "listitem: $currentDisplayName: success"
+            dialog_command "listitem: $currentDisplayName: success"
             successList+=("$currentDisplayName")
         fi
         debug_message "Output of the install package command: $pkgInstallerOutput"
@@ -838,46 +877,55 @@ pkgsToInstall=()
 pkgValidations=()
 
 # Build dialogList array by reading our configuration and looping through things
-build_installomator_array
 
-build_pkg_arrays
+#build_dialog_array InitialScripts
+build_dialog_array Installomator
+build_dialog_array Packages
+build_dialog_array Scripts
 
-build_script_arrays
+build_dialog_list_options
 
+##############################
+#   Process Initial Scripts  #
+##############################
+
+process_scripts InitialScripts
 
 ##################################
 #   Draw our dialog list window  #
 ##################################
-build_dialog_list_options
 
-#Create our initial Dialog Window
-$dialogPath \
---title "$dialogTitle" \
---message "$dialogMessage" \
---icon "$dialogIcon" \
-${dialogAdditionalOptions[@]} \
---button1disabled \
---commandfile "$dialogCommandFile" \
---quitkey "]" \
-${dialogListOptions[@]} \
-& sleep 1
+#Create our initial Dialog Window. Do this in an "until" loop, in case it fails to launch for some reason
+until pgrep -q -x "Dialog"; do
+    $dialogPath \
+    --title "$dialogTitle" \
+    --message "$dialogMessage" \
+    --icon "$dialogIcon" \
+    ${dialogAdditionalOptions[@]} \
+    --button1disabled \
+    --commandfile "$dialogCommandFile" \
+    --quitkey "]" \
+    ${dialogListOptions[@]} \
+    & sleep 1
+done
 
 #########################
 #   Install the things  #
 #########################
+
 process_installomator_labels
 
 process_pkgs
 
-process_scripts
+process_scripts Scripts
 
 #Check if we have a custom Dialog.app icon waiting to process. If yes, reinstall dialog
 if [ -e "/Library/Application Support/Dialog/Dialog.png" ]; then
-    dialog_list_command "listitem: add, title: Finishing up"
-    dialog_list_command "listitem: Finishing up: wait"
+    dialog_command "listitem: add, title: Finishing up"
+    dialog_command "listitem: Finishing up: wait"
     rm_if_exists "$dialogAppPath"
     install_dialog
-    dialog_list_command "listitem: Finishing up: success"
+    dialog_command "listitem: Finishing up: success"
 fi
 
 if [ "$dryRun" = 1 ]; then
@@ -897,7 +945,6 @@ if [ -z "$failList" ]; then
     --icon "$successDialogIcon" \
     --button1text "$successDialogRestartButtonText" \
     ${successDialogAdditionalOptions[@]} \
-    --timer 120
 
     cleanup_and_restart
 else
@@ -914,7 +961,6 @@ else
     --button1text "$failureDialogRestartButtonText" \
     ${failureDialogAdditionalOptions[@]} \
     ${failListItems[@]} \
-    --timer 300
 
     cleanup_and_restart
 fi
