@@ -25,7 +25,7 @@ Once the primary script is run, the following sequence occurs:
 1. Baseline then waits until an active end user is logged in on the device.
     1. This process does not have a timeout and will continue to wait until a user has logged into the device.
 1. When a valid user is identified `InitialScripts` are processed.
-    1. There is no SwiftDialog component to `InitialScripts`. This is where you can customize your welcome experience to suit your use case.
+    1. There is no SwiftDialog component to `InitialScripts`. This is where you can customize your welcome experience to suit your use case by writing your own SwiftDialog script and calling it here.
 1. Once `InitialScripts` are completed, a SwiftDialog progress list will show each additional item as it is processed.
 1. Installomator is used to process any labels defined in the configuration profile
 2. Any packages defined inthe configuration profile are run.
@@ -35,6 +35,7 @@ Once the primary script is run, the following sequence occurs:
 6. The entire directory `/usr/local/Baseline` is deleted.
 7. The user is presented with a simple message indicating whether everything went smoothly or if there were errors. This message has a timer.
 8. After the timer the device forcibly restarts via `shutdown -r now`
+    1. This restart can optionally be disabled
 
 ### Additional Info
 
@@ -116,7 +117,7 @@ Optional arguments for Packages:
 - `<MD5>` : Use this to define the expected md5 hash to ensure the integrity of your package.
 - `<Arguments>` : In the rare cases a .pkg has additional arguments you wish to pass through the `installer` command, you can do so using this key.
 
-## Define `Scripts`
+## Defining `Scripts`
 Required arguments for Scripts:
 - `<DisplayName>` : The human facing name of this item
 - `<ScriptPath>` : The path to the script to be installed. The path can be defined in three ways
@@ -143,11 +144,19 @@ Optional arguments for Scripts:
 </array>
 ```
 
-## Define `InitialScripts`
+## Defining `InitialScripts`
     - InitialScripts are processed by the same function as `Scripts` and thus have the same requirements and features.
     - InitialScripts are run immediately upon a confirmed end user login, and prior to the main Dialog list.
     - There is no SwiftDialog window open while Initial Scripts are being processed. This means admins are welcome to create their own custom SwiftDialog experience with branding and messaging as you see fit.
     - It is recommended that Initial Scripts call a dialog window with the `--blurscreen` and `--ontop` options to match the defaults used in the main Baseline script.
+
+## Configuring `Restart`
+    - By default, Baseline forces a restart on the device upon completion of all tasks. If you do not want this, you can add a boolean key ofr `Restart` and provide the value `false`
+    ```
+    <key>Restart</key>
+    <false\>
+    ```
+    If this key is provided, the device is not forced to restart and the final dialog window will not include a timer.
 
 ## Using iMazing Profile Editor
 Currently Baseline is not included in the iMazing Profile Editor default repository, when a full release is announced a pull request will be made to make this happen.
