@@ -60,7 +60,7 @@ Within the Baseline folder are the following:
 
 The installation package also installs and loads a LaunchDaemon: `/Library/LaunchDaemons/com.secondsonconsulting.baseline.plist`
 
-Baseline logs can be found at `/var/log/Baseline/Baseline.log`
+Baseline logs can be found at `/var/log/Baseline.log`
 The full `set -x ` verbose script output can be found at `/var/log/BaselineOutput.log`
 
 # Configuration Profile
