@@ -60,7 +60,6 @@ fi
 #Variables for our primary Dialog window
 dialogTitle="Your computer setup is underway"
 dialogMessage="Feel free to step away, this could take 30 minutes or more. \n\nYour computer will restart when it's ready for use."
-#^^^dialogIcon="/System/Library/CoreServices/Erase Assistant.app"
 dialogIcon="/System/Library/CoreServices/KeyboardSetupAssistant.app/Contents/Resources/AppIcon.icns"
 dialogAdditionalOptions=(
     --blurscreen
