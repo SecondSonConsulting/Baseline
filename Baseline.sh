@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="v.0.5.1"
+scriptVersion="v.0.5.2"
 
 ########################################################################################################
 ########################################################################################################
@@ -60,7 +60,8 @@ fi
 #Variables for our primary Dialog window
 dialogTitle="Your computer setup is underway"
 dialogMessage="Feel free to step away, this could take 30 minutes or more. \n\nYour computer will restart when it's ready for use."
-dialogIcon="/System/Library/CoreServices/Erase Assistant.app"
+#^^^dialogIcon="/System/Library/CoreServices/Erase Assistant.app"
+dialogIcon="/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/GenericFolderIcon.icns"
 dialogAdditionalOptions=(
     --blurscreen
     --width 900
@@ -876,20 +877,23 @@ scriptArguments=()
 pkgsToInstall=()
 pkgValidations=()
 
+##############################
+#   Process Initial Scripts  #
+##############################
+
+process_scripts InitialScripts
+
+###################
+#   Build Arrays  #
+###################
 # Build dialogList array by reading our configuration and looping through things
 
-#build_dialog_array InitialScripts
 build_dialog_array Installomator
 build_dialog_array Packages
 build_dialog_array Scripts
 
 build_dialog_list_options
 
-##############################
-#   Process Initial Scripts  #
-##############################
-
-process_scripts InitialScripts
 
 ##################################
 #   Draw our dialog list window  #
