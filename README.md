@@ -1,6 +1,6 @@
 # Baseline (Public Beta)
 ![Baseline-Progress](https://user-images.githubusercontent.com/106293503/215353375-baee3354-9cf8-463b-b92d-65fde266498c.png)
-An MDM agnostic zero touch solution for macOS. 
+An MDM agnostic zero touch or light touch solution for macOS. 
 
 By leveraging SwiftDialog, Installomator, and original code, Baseline provides an automated way to install applications and run scripts. Configure the behavior of Baseline via a mobileconfig file. Baseline will install packages, scripts, and Installomator labels as defined in the configuration profile.
 
@@ -20,10 +20,11 @@ When the Baseline installation package is run, assets are delivered as well as a
 Once the primary script is run, the following sequence occurs:
 1. Verifies a configuration file in the preference doman of `com.secondsonconsulting.baseline` is present on the device.
     1. Baseline will timeout after 10 minutes if a profile cannot be found.
-1. If Installomator labels are defined in the mobile configuration profile, then the latest version of Installomator is installed.
+1. If Installomator labels are defined in the mobile configuration profile, then the latest version of Installomator is downloaded and installed.
 1. The latest version of SwiftDialog is installed.
+    1. This will be downloaded from Github, unless you bundle your own version and place it in `/usr/local/Baseline/Packages/SwiftDialog.pkg` 
 1. Baseline then waits until an active end user is logged in on the device.
-    1. This process does not have a timeout and will continue to wait until a user has logged into the device.
+    1. This process does not have a timeout and will continue to wait until a user has logged in.
 1. When a valid user is identified `InitialScripts` are processed.
     1. There is no SwiftDialog component to `InitialScripts`. This is where you can customize your welcome experience to suit your use case by writing your own SwiftDialog script and calling it here.
 1. Once `InitialScripts` are completed, a SwiftDialog progress list will show each additional item as it is processed.
@@ -34,8 +35,8 @@ Once the primary script is run, the following sequence occurs:
 5. Baseline deletes the LaunchDaemon, so that it is not loaded again after a restart.
 6. The entire directory `/usr/local/Baseline` is deleted.
 7. The user is presented with a simple message indicating whether everything went smoothly or if there were errors. This message has a timer.
-8. After the timer the device forcibly restarts via `shutdown -r now`
-    1. This restart can optionally be disabled
+8. After the timer the device forcibly restarts via `shutdown -r now`.
+    1. This restart can optionally be disabled with a profile key.
 
 ### Additional Info
 
@@ -66,15 +67,16 @@ The full `set -x ` verbose script output can be found at `/var/log/BaselineOutpu
 # Configuration Profile
 Baseline performs actions based on a configuration profile delivered via MDM or manually installed. The top level keys in the profile are arrays with dictionaries defined beneath them.
 ## Currently Supported Keys
-- `<InitialScripts>`
-- `<Installomator>`
-- `<Packages>`
-- `<Scripts>`
+- `InitialScripts`
+- `Installomator`
+- `Packages`
+- `Scripts`
 
 ## Defining `Installomator` Labels
 
-By default, Baseline runs Installomator labels with the following arguments:
+By default, Baseline runs Installomator labels with the following arguments in order to ensure users are not prompted to quit applications:
 `BLOCKING_PROCESS_ACTION=kill`
+`NOTIFY=silent`
 
  Required arguments for an Installomator label:
 - `<DisplayName>` : The human facing name of this item.
@@ -163,5 +165,5 @@ Currently Baseline is not included in the iMazing Profile Editor default reposit
 For now, you can utilize iMazing by downloading the plist file in the "Profile Manifest" folder of this Github repo and then following the "Simple customization" instructions to get it in place on your workstation: https://imazing.com/guides/imazing-profile-editor-working-with-custom-preference-manifests
 
 ## Thank you to the Mac Admins Community
-This project wouldn’t be possible without the amazing hard work provided to the Mac Admins community. Bart Reardon, Søren Theilgaard, Armin Briegel, Adam Codega, Dan Snelson, and all of the other amazing people maintaining and testing SwiftDialog, Installomator, and other community tools.
+This project wouldn’t be possible without the amazing hard work provided to the Mac Admins community. Bart Reardon, Søren Theilgaard, Armin Briegel, Adam Codega, Dan Snelson, Pico Mitchell, and all of the other amazing people maintaining and testing SwiftDialog, Installomator, and other community tools.
 We are happy to have the opportunity to give back, and hope other Mac Admins might find this project useful.
