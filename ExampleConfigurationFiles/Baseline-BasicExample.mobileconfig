@@ -5,16 +5,19 @@
 	<key>PayloadContent</key>
 	<array>
 		<dict>
-			<key>PayloadDisplayName</key>
-			<string>Baseline</string>
-			<key>PayloadIdentifier</key>
-			<string>com.secondsonconsulting.baseline.D031FEC3-06B0-497A-BC0A-5D24AE8E91AD</string>
-			<key>PayloadType</key>
-			<string>com.secondsonconsulting.baseline</string>
-			<key>PayloadUUID</key>
-			<string>D031FEC3-06B0-497A-BC0A-5D24AE8E91AD</string>
-			<key>PayloadVersion</key>
-			<integer>1</integer>
+			<key>InitialScripts</key>
+			<array>
+				<dict>
+					<key>Arguments</key>
+					<string>--fdsa</string>
+					<key>DisplayName</key>
+					<string>Initial Example Script</string>
+					<key>MD5</key>
+					<string>e567257026d6032dd232df75fd3ba500</string>
+					<key>ScriptPath</key>
+					<string>ExampleScript.sh</string>
+				</dict>
+			</array>
 			<key>Installomator</key>
 			<array>
 				<dict>
@@ -30,19 +33,6 @@
 					<string>dockutil</string>
 				</dict>
 			</array>
-			<key>Scripts</key>
-			<array>
-				<dict>
-					<key>DisplayName</key>
-					<string>Example Script</string>
-					<key>ScriptPath</key>
-					<string>ExampleScript.sh</string>
-					<key>Arguments</key>
-					<string>--asdf</string>
-					<key>MD5</key>
-					<string>e567257026d6032dd232df75fd3ba500</string>
-				</dict>
-			</array>
 			<key>Packages</key>
 			<array>
 				<dict>
@@ -52,6 +42,29 @@
 					<string>ExamplePKG.pkg</string>
 					<key>TeamID</key>
 					<string>7Q6XP5698G</string>
+				</dict>
+			</array>
+			<key>PayloadDisplayName</key>
+			<string>Baseline</string>
+			<key>PayloadIdentifier</key>
+			<string>com.secondsonconsulting.baseline.D031FEC3-06B0-497A-BC0A-5D24AE8E91AD</string>
+			<key>PayloadType</key>
+			<string>com.secondsonconsulting.baseline</string>
+			<key>PayloadUUID</key>
+			<string>F46B02DA-FF67-481D-B39C-485F8CC9E39B</string>
+			<key>PayloadVersion</key>
+			<integer>1</integer>
+			<key>Scripts</key>
+			<array>
+				<dict>
+					<key>Arguments</key>
+					<string>--asdf</string>
+					<key>DisplayName</key>
+					<string>Example Script</string>
+					<key>MD5</key>
+					<string>e567257026d6032dd232df75fd3ba500</string>
+					<key>ScriptPath</key>
+					<string>ExampleScript.sh</string>
 				</dict>
 			</array>
 		</dict>
@@ -69,7 +82,7 @@
 	<key>PayloadType</key>
 	<string>Configuration</string>
 	<key>PayloadUUID</key>
-	<string>53C97AF2-0204-476E-BAC9-E805FF698FA3</string>
+	<string>8A016FF5-057E-4F31-9043-9C715F061433</string>
 	<key>PayloadVersion</key>
 	<integer>1</integer>
 </dict>
