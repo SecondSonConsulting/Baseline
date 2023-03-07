@@ -1,4 +1,4 @@
-# Baseline (Public Beta)
+# Baseline
 ![Baseline-Progress](https://user-images.githubusercontent.com/106293503/215353375-baee3354-9cf8-463b-b92d-65fde266498c.png)
 An MDM agnostic zero touch or light touch solution for macOS. 
 
