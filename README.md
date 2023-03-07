@@ -157,7 +157,7 @@ Optional arguments for Scripts:
 - It is recommended that Initial Scripts call a dialog window with the `--blurscreen` and `--ontop` options to match the defaults used in the main Baseline script.
 
 ## Configuring `Restart`
-- By default, Baseline forces a restart on the device upon completion of all tasks. If you do not want this, you can add a boolean key ofr `Restart` and provide the value `false`
+- By default, Baseline forces a restart on the device upon completion of all tasks. If you do not want this, you can add a boolean key of `Restart` and provide the value `false`
     
 ```
 <key>Restart</key>
@@ -168,6 +168,7 @@ Optional arguments for Scripts:
 
 ## Using iMazing Profile Editor
 Currently Baseline is not included in the iMazing Profile Editor default repository. When the initial feature set is complete, there will be a pull request to make this happen.
+
 For now, you can utilize iMazing by downloading the plist file in the "Profile Manifest" folder of this Github repo and then following the "Simple customization" instructions to get it in place on your workstation: https://imazing.com/guides/imazing-profile-editor-working-with-custom-preference-manifests
 
 ## Thank you to the Mac Admins Community
