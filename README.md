@@ -130,7 +130,9 @@ Required arguments for Scripts:
 Optional arguments for Scripts:
 - `<MD5>` : Use this to define the expected md5 hash to ensure the integrity of your script.
 - `<Arguments>` : Use this to define additional arguments you wish to pass to your script.
+
 ```
+
 <key>Scripts</key>
 <array>
     <dict>
@@ -144,24 +146,28 @@ Optional arguments for Scripts:
         <string>e567252z26d6032dd232df75fd3ba500</string>
     </dict>
 </array>
+
 ```
 
 ## Defining `InitialScripts`
-    - InitialScripts are processed by the same function as `Scripts` and thus have the same requirements and features.
-    - InitialScripts are run immediately upon a confirmed end user login, and prior to the main Dialog list.
-    - There is no SwiftDialog window open while Initial Scripts are being processed. This means admins are welcome to create their own custom SwiftDialog experience with branding and messaging as you see fit.
-    - It is recommended that Initial Scripts call a dialog window with the `--blurscreen` and `--ontop` options to match the defaults used in the main Baseline script.
+
+- InitialScripts are processed by the same function as `Scripts` and thus have the same requirements and features.
+- InitialScripts are run immediately upon a confirmed end user login, and prior to the main Dialog list.
+- There is no SwiftDialog window open while Initial Scripts are being processed. This means admins are welcome to create their own custom SwiftDialog experience with branding and messaging as you see fit.
+- It is recommended that Initial Scripts call a dialog window with the `--blurscreen` and `--ontop` options to match the defaults used in the main Baseline script.
 
 ## Configuring `Restart`
-    - By default, Baseline forces a restart on the device upon completion of all tasks. If you do not want this, you can add a boolean key ofr `Restart` and provide the value `false`
-    ```
-    <key>Restart</key>
-    <false\>
-    ```
-    If this key is provided, the device is not forced to restart and the final dialog window will not include a timer.
+- By default, Baseline forces a restart on the device upon completion of all tasks. If you do not want this, you can add a boolean key ofr `Restart` and provide the value `false`
+    
+```
+<key>Restart</key>
+<false\>
+```
+
+- If this key is provided, the device is not forced to restart and the final dialog window will not include a timer.
 
 ## Using iMazing Profile Editor
-Currently Baseline is not included in the iMazing Profile Editor default repository, when a full release is announced a pull request will be made to make this happen.
+Currently Baseline is not included in the iMazing Profile Editor default repository. When the initial feature set is complete, there will be a pull request to make this happen.
 For now, you can utilize iMazing by downloading the plist file in the "Profile Manifest" folder of this Github repo and then following the "Simple customization" instructions to get it in place on your workstation: https://imazing.com/guides/imazing-profile-editor-working-with-custom-preference-manifests
 
 ## Thank you to the Mac Admins Community
