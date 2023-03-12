@@ -862,14 +862,12 @@ function configure_dialog_failure_arguments()
 
 configure_dialog_failure_arguments "--title" "Your computer setup is complete"
 configure_dialog_failure_arguments "--icon" "/System/Library/CoreServices/KeyboardSetupAssistant.app/Contents/Resources/AppIcon.icns"
+configure_dialog_failure_arguments "--message" "Your computer setup is complete, however not everything was installed as expected. Review the list below, and contact IT if you need assistance."
 
 # Different values for --message and --button1text if we're forcing restart
 if $forceRestart; then
-    configure_dialog_failure_arguments "--message" "Your computer setup is complete, however not everything was installed as expected. Review the list below, and contact IT if you need assistance."
     configure_dialog_failure_arguments "--button1text" "Restart Now"
     configure_dialog_failure_arguments "--timer" "120"
-else
-    configure_dialog_failure_arguments "--message" "Your device is ready for you."
 fi
 
 #############################################
