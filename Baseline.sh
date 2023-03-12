@@ -986,12 +986,18 @@ build_dialog_list_options
 #   Draw our dialog list window  #
 ##################################
 
-#Create our initial Dialog Window. Do this in an "until" loop, in case it fails to launch for some reason
+#Create our initial Dialog Window. Do this in an "until" loop, and attempts 10 times before exiting in case it fails to launch for some reason
+dialogAttemptCount=1
 until pgrep -q -x "Dialog"; do
-    ${finalListCommand[@]} \
-    --commandfile "$dialogCommandFile" \
-    ${dialogListItems[@]} \
-    & sleep 1
+    if [ "$dialogAttemptCount" -le 10 ]; then
+        ${finalListCommand[@]} \
+        --commandfile "$dialogCommandFile" \
+        ${dialogListItems[@]} \
+        & sleep 1
+        dialogAttemptCount=$(( dialogAttemptCount +1 ))
+    else
+        cleanup_and_exit 1 "**WARNING** SwiftDialog failed to launch after 10 attempts. This likely indicates an issue with the options in the configuration file. Check your file paths."
+    fi
 done
 
 #########################
@@ -1023,19 +1029,58 @@ dialog_command "quit:"
 #Do final script swiftDialog stuff
 #If the failList is empty, this means success
 if [ -z "$failList" ]; then
-    #Create our "Success" Dialog Window
-    ${finalSuccessCommand[@]}
+    #Create our Success Dialog Window. We use a "while" loop and a nested if/then in order to bail if there's a configuration file problem.
+    #Set a timer for our attempts
+    dialogAttemptCount=1
+    #Set our exit variable for the while loop
+    dialogCompletionWindow="incomplete"
+    #Set our exit condition for the while loop
+    while [ $dialogCompletionWindow = "incomplete" ]; do
+        #If we haven't tried 10 times yet, then try to call Dialog
+        if [ "$dialogAttemptCount" -le 10 ]; then
+            #If dialog exits 0, then exit our loop
+            if ${finalSuccessCommand[@]}; then
+                dialogCompletionWindow="complete"
+            fi
+            #Increment our dialog attempt count
+            sleep 1
+            dialogAttemptCount=$(( dialogAttemptCount +1 ))
+        else
+            #If we got here, dialog tried 10 times and never opened properly. Exit with a message to the log file.
+            cleanup_and_exit 1 "**WARNING** SwiftDialog failed to launch after 10 attempts. This likely indicates an issue with the options in the configuration file. Check your file paths."
+        fi
+    done
 
+    # We are done!
     cleanup_and_restart
 else
-    #Build fail list
+    #There was at least one failed item. Build fail list
     failListItems=()
     for i in ${failList[@]}; do
         failListItems+=(--listitem $i)
     done
-    #Create our "Failure" Dialog Window
-    ${finalFailureCommand[@]} \
-    ${failListItems[@]} \
+    #Create our Failure Dialog Window. We use a "while" loop and a nested if/then in order to bail if there's a configuration file problem.
+    #Set a timer for our attempts
+    dialogAttemptCount=1
+    #Set our exit variable for the while loop
+    dialogCompletionWindow="incomplete"
+    #Set our exit condition for the while loop
+    while [ $dialogCompletionWindow = "incomplete" ]; do
+        #If we haven't tried 10 times yet, then try to call Dialog
+        if [ "$dialogAttemptCount" -le 10 ]; then
+            #If dialog exits 0, then exit our loop
+            if ${finalFailureCommand[@]} ${failListItems[@]}; then
+                dialogCompletionWindow="complete"
+            fi
+            #Increment our dialog attempt count
+            sleep 1
+            dialogAttemptCount=$(( dialogAttemptCount +1 ))
+        else
+            #If we got here, dialog tried 10 times and never opened properly. Exit with a message to the log file.
+            cleanup_and_exit 1 "**WARNING** SwiftDialog failed to launch after 10 attempts. This likely indicates an issue with the options in the configuration file. Check your file paths."
+        fi
+    done
 
+    # We are done!
     cleanup_and_restart
 fi
