@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="v.1.1beta1"
+scriptVersion="v.1.1beta2"
 
 ########################################################################################################
 ########################################################################################################
@@ -1039,7 +1039,9 @@ if [ -z "$failList" ]; then
         #If we haven't tried 10 times yet, then try to call Dialog
         if [ "$dialogAttemptCount" -le 10 ]; then
             #If dialog exits 0, then exit our loop
-            if ${finalSuccessCommand[@]}; then
+            ${finalSuccessCommand[@]}
+            dialogExitCode=$?
+            if [ $dialogExitCode = 0 ] || [ $dialogExitCode = 4 ]; then
                 dialogCompletionWindow="complete"
             fi
             #Increment our dialog attempt count
@@ -1069,7 +1071,9 @@ else
         #If we haven't tried 10 times yet, then try to call Dialog
         if [ "$dialogAttemptCount" -le 10 ]; then
             #If dialog exits 0, then exit our loop
-            if ${finalFailureCommand[@]} ${failListItems[@]}; then
+            ${finalFailureCommand[@]} ${failListItems[@]}
+            dialogExitCode=$?
+            if [ $dialogExitCode = 0 ] || [ $dialogExitCode = 4 ]; then
                 dialogCompletionWindow="complete"
             fi
             #Increment our dialog attempt count
