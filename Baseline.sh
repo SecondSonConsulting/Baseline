@@ -711,32 +711,24 @@ function process_pkgs()
 
 function build_dialog_list_options()
 {
+    # This function populates an array with all of the items Baseline iterates through
     for i in $dialogList; do
         dialogListItems+=(--listitem $i)
     done
 }
 
-
-#################################
-#   Setup our timeout deadline  #
-#################################
-
-#How long do you want this script to run before admitting something went wrong and bailing out?
-#Check if there's a custom timeout devined in the mobileconfig, and set it
-if $pBuddy -c "Print :Timeout" "$BaselineConfig" > /dev/null 2>&1; then
-    maximumDuration=$($pBuddy -c "Print :Timeout" "$BaselineConfig")
-else
-    #Else, set our default of 1 hour
-    maximumDuration=3600
-fi
-current_epoch_time=$(date +%s)
-timeout=$((maximumDuration+current_epoch_time))
-bailOut=""
-function timeout_check()
+function check_exit_condition()
 {
-    if [ "$(date +%s)" -gt "$timeout" ] ; then
-        bailOut=1
+    exitConditionPath=""
+    # If `ExitCondition` key is passed in the configuration profile, then set a variable
+    if $pBuddy -c "Print :ExitCondition" "$BaselineConfig" > /dev/null 2>&1; then
+        exitConditionPath=$($pBuddy -c "Print :ExitCondition" "$BaselineConfig" | sed 's/"//g' )
     fi
+    # If our variable is set, and if the file exists, cleanup and exit quietly
+    if [ -n "$exitConditionPath" ] && [ -e "$exitConditionPath" ]; then
+        cleanup_and_exit "Exit Condition exists. Exiting: "$exitConditionPath""
+    fi
+
 }
 
 #######################
@@ -895,6 +887,9 @@ debug_message "Starting script actions"
 
 #Verify we're running as root
 check_root
+
+#Check if exit condition has been defined
+check_exit_condition
 
 #No falling asleep on the job, bud
 no_sleeping
