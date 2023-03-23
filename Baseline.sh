@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="v.1.0"
+scriptVersion="v.1.1"
 
 ########################################################################################################
 ########################################################################################################
@@ -52,63 +52,6 @@ if  [ $forceRestartSetting = "false" ]; then
 else
     forceRestart="true"
 fi
-
-#######################
-#   Customizations    #
-#######################
-
-#Variables for our primary Dialog window
-dialogTitle="Your computer setup is underway"
-dialogMessage="Feel free to step away, this could take 30 minutes or more. \n\nYour computer will restart when it's ready for use."
-dialogIcon="/System/Library/CoreServices/KeyboardSetupAssistant.app/Contents/Resources/AppIcon.icns"
-dialogAdditionalOptions=(
-    --blurscreen
-    --width 900
-    --height 550
-)
-
-#Variables for our Successful Completion Dialog window
-successDialogTitle="Your computer setup is complete"
-successDialogIcon="$dialogIcon"
-successDialogAdditionalOptions=(
-    --blurscreen
-)
-
-if [ $forceRestart = "true" ];then
-    successDialogMessage="Your device needs to restart before you can begin use."
-    successDialogRestartButtonText="Restart Now"
-    successDialogAdditionalOptions+=(--timer 120)
-else
-    successDialogMessage="Your device is ready for you."
-    successDialogRestartButtonText="Ok"
-fi
-
-#Variables for our Failure Completion Dialog window
-failureDialogTitle="Your computer setup is complete"
-failureDialogMessage="Your computer setup is complete, however not everything was installed as expected. Review the list below, and contact IT if you need assistance."
-failureDialogIcon="$dialogIcon"
-failureDialogAdditionalOptions=(
-    --blurscreen
-    --height 550
-)
-
-if [ $forceRestart = "true" ];then
-    failureDialogRestartButtonText="Restart Now"
-    failureDialogAdditionalOptions+=(--timer 300)
-else
-    failureDialogRestartButtonText="Ok"
-fi
-
-#Default Installomator Options
-defaultInstallomatorOptions=(
-    BLOCKING_PROCESS_ACTION=kill
-    NOTIFY=silent
-)
-
-if [ "$dryRun" = 1 ]; then
-    defaultInstallomatorOptions+="DEBUG=2"
-fi
-
 
 ########################################################################################################
 ########################################################################################################
@@ -768,33 +711,170 @@ function process_pkgs()
 
 function build_dialog_list_options()
 {
+    # This function populates an array with all of the items Baseline iterates through
     for i in $dialogList; do
-        dialogListOptions+=(--listitem $i)
+        dialogListItems+=(--listitem $i)
     done
 }
 
-
-#################################
-#   Setup our timeout deadline  #
-#################################
-
-#How long do you want this script to run before admitting something went wrong and bailing out?
-#Check if there's a custom timeout devined in the mobileconfig, and set it
-if $pBuddy -c "Print :Timeout" "$BaselineConfig" > /dev/null 2>&1; then
-    maximumDuration=$($pBuddy -c "Print :Timeout" "$BaselineConfig")
-else
-    #Else, set our default of 1 hour
-    maximumDuration=3600
-fi
-current_epoch_time=$(date +%s)
-timeout=$((maximumDuration+current_epoch_time))
-bailOut=""
-function timeout_check()
+function check_exit_condition()
 {
-    if [ "$(date +%s)" -gt "$timeout" ] ; then
-        bailOut=1
+    exitConditionPath=""
+    # If `ExitCondition` key is passed in the configuration profile, then set a variable
+    if $pBuddy -c "Print :ExitCondition" "$BaselineConfig" > /dev/null 2>&1; then
+        exitConditionPath=$($pBuddy -c "Print :ExitCondition" "$BaselineConfig" | sed 's/"//g' )
+    fi
+    # If our variable is set, and if the file exists, cleanup and exit quietly
+    if [ -n "$exitConditionPath" ] && [ -e "$exitConditionPath" ]; then
+        cleanup_and_exit "Exit Condition exists. Exiting: "$exitConditionPath""
+    fi
+
+}
+
+#######################
+#   Customizations    #
+#######################
+
+######################################
+#   Configure List Customizations    #
+######################################
+
+finalListCommand=()
+finalListCommand+="$dialogPath"
+finalListCommand+="--blurscreen"
+finalListCommand+="--button1disabled"
+
+# Read the Dialog List Arguments customizations, if there are any
+if $pBuddy -c "Print DialogListOptions" "$BaselineConfig" > /dev/null 2>&1; then
+    dialogListArguments=$($pBuddy -c "Print DialogListOptions" "$BaselineConfig")
+fi
+
+# If we found customizations, read them into our final list command array
+if [ -n "$dialogListArguments" ]; then
+    eval 'for customization in '$dialogListArguments'; do finalListCommand+=$customization; done'
+fi
+
+# This function is not with the rest, but it makes the most sense as I add on this feature.
+# I also don't know how to set the variable by passing the name of that variable as an argument to the function.
+# So I'll have to define this function several times.
+# I grow old … I grow old …I shall wear the bottoms of my trousers rolled..
+function configure_dialog_list_arguments()
+{
+    # $1 is the SwiftDialog option to change, $2 is the default value for that option if its not included in the profile
+    if (($dialogListArguments[(Ie)$1])); then
+        # $1 was included in the customization, so we report it and move along
+        log_message "Dialog List Customization Found: $1"
+    else
+        # $1 wasn't included in the customization options, so we'll set the default value
+        finalListCommand+="$1"
+        finalListCommand+="$2"
     fi
 }
+
+configure_dialog_list_arguments "--title" "Your computer setup is underway"
+configure_dialog_list_arguments "--message" "Feel free to step away, this could take 30 minutes or more. \n\nYour computer will restart when it's ready for use."
+configure_dialog_list_arguments "--icon" "/System/Library/CoreServices/KeyboardSetupAssistant.app/Contents/Resources/AppIcon.icns"
+configure_dialog_list_arguments "--width" 900
+configure_dialog_list_arguments "--height" 550
+configure_dialog_list_arguments "--quitkey" ']'
+
+#########################################
+#   Configure Success Customizations    #
+#########################################
+
+finalSuccessCommand=()
+finalSuccessCommand+="$dialogPath"
+finalSuccessCommand+="--blurscreen"
+
+# Read the Dialog Success Arguments customizations, if there are any
+if $pBuddy -c "Print DialogSuccessOptions" "$BaselineConfig" > /dev/null 2>&1; then
+    dialogSuccessArguments=$($pBuddy -c "Print DialogSuccessOptions" "$BaselineConfig")
+fi
+
+# If we found customizations, read them into our final list command array
+if [ -n "$dialogSuccessArguments" ]; then
+    eval 'for customization in '$dialogSuccessArguments'; do finalSuccessCommand+=$customization; done'
+fi
+
+function configure_dialog_success_arguments()
+{
+    # $1 is the SwiftDialog option to change, $2 is the default value for that option if its not included in the profile
+    if (($dialogSuccessArguments[(Ie)$1])); then
+        # $1 was included in the customization, so we report it and move along
+        log_message "Dialog Success Customization Found: $1"
+    else
+        # $1 wasn't included in the customization options, so we'll set the default value
+        finalSuccessCommand+="$1"
+        finalSuccessCommand+="$2"
+    fi
+}
+
+configure_dialog_success_arguments "--title" "Your computer setup is complete"
+configure_dialog_success_arguments "--icon" "/System/Library/CoreServices/KeyboardSetupAssistant.app/Contents/Resources/AppIcon.icns"
+
+# Different values for --message and --button1text if we're forcing restart
+if $forceRestart; then
+    configure_dialog_success_arguments "--message" "Your device needs to restart before you can begin use."
+    configure_dialog_success_arguments "--button1text" "Restart Now"
+    configure_dialog_success_arguments "--timer" "120"
+else
+    configure_dialog_success_arguments "--message" "Your device is ready for you."
+fi
+
+#########################################
+#   Configure Failure Customizations    #
+#########################################
+
+finalFailureCommand=()
+finalFailureCommand+="$dialogPath"
+finalFailureCommand+="--blurscreen"
+
+# Read the Dialog Failure Arguments customizations, if there are any
+if $pBuddy -c "Print DialogFailureOptions" "$BaselineConfig" > /dev/null 2>&1; then
+    dialogFailureArguments=$($pBuddy -c "Print DialogFailureOptions" "$BaselineConfig")
+fi
+
+# If we found customizations, read them into our final list command array
+if [ -n "$dialogFailureArguments" ]; then
+    eval 'for customization in '$dialogFailureArguments'; do finalFailureCommand+=$customization; done'
+fi
+
+function configure_dialog_failure_arguments()
+{
+    # $1 is the SwiftDialog option to change, $2 is the default value for that option if its not included in the profile
+    if (($dialogFailureArguments[(Ie)$1])); then
+        # $1 was included in the customization, so we report it and move along
+        log_message "Dialog Failure Customization Found: $1"
+    else
+        # $1 wasn't included in the customization options, so we'll set the default value
+        finalFailureCommand+="$1"
+        finalFailureCommand+="$2"
+    fi
+}
+
+configure_dialog_failure_arguments "--title" "Your computer setup is complete"
+configure_dialog_failure_arguments "--icon" "/System/Library/CoreServices/KeyboardSetupAssistant.app/Contents/Resources/AppIcon.icns"
+configure_dialog_failure_arguments "--message" "Your computer setup is complete, however not everything was installed as expected. Review the list below, and contact IT if you need assistance."
+
+# Different values for --message and --button1text if we're forcing restart
+if $forceRestart; then
+    configure_dialog_failure_arguments "--button1text" "Restart Now"
+    configure_dialog_failure_arguments "--timer" "120"
+fi
+
+#############################################
+#   Configure Default Installomator Options #
+#############################################
+
+defaultInstallomatorOptions=(
+    BLOCKING_PROCESS_ACTION=kill
+    NOTIFY=silent
+)
+
+if [ "$dryRun" = 1 ]; then
+    defaultInstallomatorOptions+="DEBUG=2"
+fi
+
 
 ########################################################################################################
 ########################################################################################################
@@ -807,6 +887,9 @@ debug_message "Starting script actions"
 
 #Verify we're running as root
 check_root
+
+#Check if exit condition has been defined
+check_exit_condition
 
 #No falling asleep on the job, bud
 no_sleeping
@@ -863,7 +946,7 @@ userHomeFolder=$(dscl . -read /users/${currentUser} NFSHomeDirectory | cut -d " 
 
 # Initiate arrays
 dialogList=()
-dialogListOptions=()
+dialogListItems=()
 failList=()
 successList=()
 
@@ -898,18 +981,18 @@ build_dialog_list_options
 #   Draw our dialog list window  #
 ##################################
 
-#Create our initial Dialog Window. Do this in an "until" loop, in case it fails to launch for some reason
+#Create our initial Dialog Window. Do this in an "until" loop, and attempts 10 times before exiting in case it fails to launch for some reason
+dialogAttemptCount=1
 until pgrep -q -x "Dialog"; do
-    $dialogPath \
-    --title "$dialogTitle" \
-    --message "$dialogMessage" \
-    --icon "$dialogIcon" \
-    ${dialogAdditionalOptions[@]} \
-    --button1disabled \
-    --commandfile "$dialogCommandFile" \
-    --quitkey "]" \
-    ${dialogListOptions[@]} \
-    & sleep 1
+    if [ "$dialogAttemptCount" -le 10 ]; then
+        ${finalListCommand[@]} \
+        --commandfile "$dialogCommandFile" \
+        ${dialogListItems[@]} \
+        & sleep 1
+        dialogAttemptCount=$(( dialogAttemptCount +1 ))
+    else
+        cleanup_and_exit 1 "**WARNING** SwiftDialog failed to launch after 10 attempts. This likely indicates an issue with the options in the configuration file. Check your file paths."
+    fi
 done
 
 #########################
@@ -941,29 +1024,62 @@ dialog_command "quit:"
 #Do final script swiftDialog stuff
 #If the failList is empty, this means success
 if [ -z "$failList" ]; then
-    #Create our "Success" Dialog Window
-    $dialogPath \
-    --title "$successDialogTitle" \
-    --message "$successDialogMessage" \
-    --icon "$successDialogIcon" \
-    --button1text "$successDialogRestartButtonText" \
-    ${successDialogAdditionalOptions[@]} \
+    #Create our Success Dialog Window. We use a "while" loop and a nested if/then in order to bail if there's a configuration file problem.
+    #Set a timer for our attempts
+    dialogAttemptCount=1
+    #Set our exit variable for the while loop
+    dialogCompletionWindow="incomplete"
+    #Set our exit condition for the while loop
+    while [ $dialogCompletionWindow = "incomplete" ]; do
+        #If we haven't tried 10 times yet, then try to call Dialog
+        if [ "$dialogAttemptCount" -le 10 ]; then
+            #If dialog exits 0, then exit our loop
+            ${finalSuccessCommand[@]}
+            dialogExitCode=$?
+            if [ $dialogExitCode = 0 ] || [ $dialogExitCode = 4 ]; then
+                dialogCompletionWindow="complete"
+            fi
+            #Increment our dialog attempt count
+            sleep 1
+            dialogAttemptCount=$(( dialogAttemptCount +1 ))
+        else
+            #If we got here, dialog tried 10 times and never opened properly. Exit with a message to the log file.
+            cleanup_and_exit 1 "**WARNING** SwiftDialog failed to launch after 10 attempts. This likely indicates an issue with the options in the configuration file. Check your file paths."
+        fi
+    done
 
+    # We are done!
     cleanup_and_restart
 else
-    #Build fail list
+    #There was at least one failed item. Build fail list
     failListItems=()
     for i in ${failList[@]}; do
         failListItems+=(--listitem $i)
     done
-    #Create our "Failure" Dialog Window
-    $dialogPath \
-    --title "$failureDialogTitle" \
-    --message "$failureDialogMessage" \
-    --icon "$failureDialogIcon" \
-    --button1text "$failureDialogRestartButtonText" \
-    ${failureDialogAdditionalOptions[@]} \
-    ${failListItems[@]} \
+    #Create our Failure Dialog Window. We use a "while" loop and a nested if/then in order to bail if there's a configuration file problem.
+    #Set a timer for our attempts
+    dialogAttemptCount=1
+    #Set our exit variable for the while loop
+    dialogCompletionWindow="incomplete"
+    #Set our exit condition for the while loop
+    while [ $dialogCompletionWindow = "incomplete" ]; do
+        #If we haven't tried 10 times yet, then try to call Dialog
+        if [ "$dialogAttemptCount" -le 10 ]; then
+            #If dialog exits 0, then exit our loop
+            ${finalFailureCommand[@]} ${failListItems[@]}
+            dialogExitCode=$?
+            if [ $dialogExitCode = 0 ] || [ $dialogExitCode = 4 ]; then
+                dialogCompletionWindow="complete"
+            fi
+            #Increment our dialog attempt count
+            sleep 1
+            dialogAttemptCount=$(( dialogAttemptCount +1 ))
+        else
+            #If we got here, dialog tried 10 times and never opened properly. Exit with a message to the log file.
+            cleanup_and_exit 1 "**WARNING** SwiftDialog failed to launch after 10 attempts. This likely indicates an issue with the options in the configuration file. Check your file paths."
+        fi
+    done
 
+    # We are done!
     cleanup_and_restart
 fi
