@@ -6,10 +6,10 @@ launchDPath="/Library/LaunchDaemons"
 launchDName="com.secondsonconsulting.baseline"
 
 #Load the launch daemon
-launchctl load -w "$launchDPath"/"$launchDName".plist > /dev/null 2>&1
+launchctl bootstrap system "$launchDPath"/"$launchDName".plist > /dev/null 2>&1
 result=$(echo $?)
 
-#Test if the load command failed
+#Test if the bootstrap command failed
 if [ "$result" != 0 ]; then
 	exit 1
 fi
