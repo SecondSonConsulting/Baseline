@@ -8,7 +8,7 @@ launchctl list "$launchDName" > /dev/null 2>&1
 listResult=$(echo $?)
 
 if [ "$listResult" = 0 ]; then
-	launchctl unload -w "$launchDPath"/"$launchDName".plist
+	launchctl bootout system/"$launchDName"
 	unloadResult=$(echo $?)
 	if [ "$unloadResult" != 0 ]; then
 		echo "UNLOAD FAILED"

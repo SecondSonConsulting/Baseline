@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="v.1.1"
+scriptVersion="v.1.2beta1"
 
 ########################################################################################################
 ########################################################################################################
@@ -27,6 +27,7 @@ fi
 #Baseline files/folders
 BaselineConfig="/Library/Managed Preferences/com.secondsonconsulting.baseline.plist"
 BaselineDir="/usr/local/Baseline"
+customConfigPlist="$BaselineDir/BaselineConfig.plist"
 logFile="/var/log/Baseline.log"
 BaselinePath="$BaselineDir/Baseline.sh"
 BaselineScripts="$BaselineDir/Scripts"
@@ -43,15 +44,6 @@ installomatorPath="/usr/local/Installomator/Installomator.sh"
 #Other stuff
 dialogCommandFile=$(mktemp /var/tmp/baselineDialog.XXXXXX)
 expectedDialogTeamID="PWA5E9TQ59"
-
-# Set variable for whether or not we'll force a restart. Defaults to 'true'
-forceRestartSetting=$($pBuddy -c "Print :Restart" "$BaselineConfig")
-
-if  [ $forceRestartSetting = "false" ]; then
-    forceRestart="false"
-else
-    forceRestart="true"
-fi
 
 ########################################################################################################
 ########################################################################################################
@@ -144,15 +136,32 @@ function initiate_report()
 #Define our script exit process. Usage: cleanup_and_exit 'exitcode' 'exit message'
 function cleanup_and_exit()
 {
+    # Check if we are going to restart
+    check_restart_option
+
+    # Check if we are leaving the Baseline working directory or deleting
+    cleanupAfterUse=$($pBuddy -c "Print :CleanupAfterUse" "$BaselineConfig")
+
+    if  [ $cleanupAfterUse = "false" ]; then
+        cleanupBaselineDirectory="false"
+    else
+        cleanupBaselineDirectory="true"
+    fi
+
+    # Log message
     log_message "Exiting: $2"
+
+    # Delete the Baseline LaunchDaemon
+    # Doing this in a loop because I've seen edge cases where it failed unexpectedly and it is high impact.
     while [ -e "$BaselineLaunchDaemon" ]; do
         rm_if_exists "$BaselineLaunchDaemon"
         sleep 1
     done
+
     kill "$caffeinatepid"
     dialog_command "quit:" 
     rm_if_exists "$dialogCommandFile"
-    if [ "$dryRun" != 1 ]; then
+    if [ "$dryRun" != 1 ] && [ "$cleanupBaselineDirectory" = "true" ] ; then
         rm_if_exists "$BaselineDir"
     fi
     exit "$1"
@@ -162,6 +171,18 @@ function cleanup_and_exit()
 # Usage: cleanup_and_exit 'exitcode' 'exit message'
 function cleanup_and_restart()
 {
+    # Check if we are going to restart
+    check_restart_option
+
+    # Check if we are leaving the Baseline working directory or deleting
+    cleanupAfterUse=$($pBuddy -c "Print :CleanupAfterUse" "$BaselineConfig")
+
+    if  [ "$cleanupAfterUse" = "false" ]; then
+        cleanupBaselineDirectory="false"
+    else
+        cleanupBaselineDirectory="true"
+    fi
+
     log_message "Exiting: $2"
     # Delete the LaunchDaemon. Saw an edge case where it didn't delete once, so I made it a while loop.
     while [ -e "$BaselineLaunchDaemon" ]; do
@@ -177,7 +198,9 @@ function cleanup_and_restart()
   
     # If this isn't a test run, force a restart
     if [ $forceRestart = "false" ]; then
-        rm_if_exists "$BaselineDir"
+        if  [ $cleanupBaselineDirectory = "true" ]; then
+            rm_if_exists "$BaselineDir"
+        fi
         echo "Force Restart is set to false. Exiting"
         exit "$1"
     elif [ "$dryRun" = 1 ]; then
@@ -185,8 +208,11 @@ function cleanup_and_restart()
         exit "$1"
     fi
 
+    # Check if we are deleting the Baseline working directory and do it
+    if  [ $cleanupBaselineDirectory = "true" ]; then
+        rm_if_exists "$BaselineDir"
+    fi
     # Shutting down
-    rm_if_exists "$BaselineDir"
     shutdown -r now
 }
 
@@ -308,7 +334,20 @@ function wait_for_user()
                 verifiedUser="true"
             fi
         fi
+    debug_message "Disabling verbose output to prevent logspam while waiting for user at timestamp: $(date +%s)"
+    set +x
     done
+    set -x
+    debug_message "Re-enabling verbose output after finding user at timestamp: $(date +%s)"
+
+}
+
+#Check for custom config. We prioritize this even over a mobileconfig file.
+function check_for_custom_plist()
+{
+    if [ -e $customConfigPlist ]; then
+        BaselineConfig="$customConfigPlist"
+    fi
 }
 
 #Verify configuration file
@@ -316,9 +355,17 @@ function verify_configuration_file()
 {
     #We need to make sure our configuration file is in place. By the time the user logs in, this should have happened.
     debug_message "Verifying configuration file. Failure here probably means an MDM profile hasn't been properly scoped, or there's a problem with the MDM delivering the profile."
+    
+    #Set timeout variables
     configFileTimeout=600
     configFileWaiting=0
+
+    # Look for a custom plist
+    check_for_custom_plist
+
+    # While the plist or configuration file doesn't exist, wait and timeout at 10 minutes if never found.
     while [ ! -e $BaselineConfig ]; do
+        check_for_custom_plist
         #wait 2 seconds
         sleep 2
         debug_message "Configuration file not found"
@@ -327,8 +374,7 @@ function verify_configuration_file()
             cleanup_and_exit 1 "ERROR: Configuration file not found within $configFileTimeout seconds. Exiting."
         fi
     done
-    debug_message "Configuration file found successfully."
-
+    debug_message "Configuration file found successfully: $BaselineConfig "
 }
 
 function build_installomator_array()
@@ -731,9 +777,136 @@ function check_exit_condition()
 
 }
 
+function check_restart_option()
+{
+    # Set variable for whether or not we'll force a restart. Defaults to 'true'
+    forceRestartSetting=$($pBuddy -c "Print :Restart" "$BaselineConfig")
+
+    if  [ $forceRestartSetting = "false" ]; then
+        forceRestart="false"
+    else
+        forceRestart="true"
+    fi
+}
+
+#############################################
+#   Configure Default Installomator Options #
+#############################################
+
+defaultInstallomatorOptions=(
+    BLOCKING_PROCESS_ACTION=kill
+    NOTIFY=silent
+)
+
+if [ "$dryRun" = 1 ]; then
+    defaultInstallomatorOptions+="DEBUG=2"
+fi
+
+
+########################################################################################################
+########################################################################################################
+##
+##      SCRIPT STARTS HERE
+##
+########################################################################################################
+########################################################################################################
+debug_message "Starting script actions"
+
+#Verify we're running as root
+check_root
+
+#Check if exit condition has been defined
+check_exit_condition
+
+#No falling asleep on the job, bud
+no_sleeping
+
+#Set trap so that things always exit cleanly
+trap cleanup_and_exit 1 2 3 6
+
+#Check if directories for Packages and Scripts exist already.
+#This is useful for testing, or if running the script directly (not the pkg)
+make_directory "$BaselineScripts"
+make_directory "$BaselinePackages"
+
+#Initiate Logging
+initiate_logging
+
+#Setup report
+initiate_report
+
+#############################################
+#   Verify a Configuration File is in Place #
+#############################################
+verify_configuration_file
+
+###########################
+#   Install Installomator #
+###########################
+#If Installomator is going to be used, install it now
+if $pBuddy -c "Print :Installomator:0" "$BaselineConfig" > /dev/null 2>&1; then
+    install_installomator
+fi
+
+#########################
+#   Install SwiftDialog #
+#########################
+install_dialog
+#If swiftDialog still isn't installed, exit with an error
+if [ ! -e "$dialogAppPath" ]; then
+    cleanup_and_exit 1 "ERROR: SwiftDialog failed to install after numerous attempts. Exiting."
+fi
+
+#############################################
+#   Wait until a user is verified logged in #
+#############################################
+wait_for_user
+
+# Get the currently logged in user home folder and UID
+currentUser=$( echo "show State:/Users/ConsoleUser" | scutil | awk '/Name :/ { print $3 }' )
+currentUserUID=$(/usr/bin/id -u "$currentUser")
+userHomeFolder=$(dscl . -read /users/${currentUser} NFSHomeDirectory | cut -d " " -f 2)
+
+#############
+#   Arrays  #
+#############
+
+# Initiate arrays
+dialogList=()
+dialogListItems=()
+failList=()
+successList=()
+
+installomatorLabels=()
+installomatorOptions=()
+
+scriptsToProcess=()
+scriptArguments=()
+
+pkgsToInstall=()
+pkgValidations=()
+
+##############################
+#   Process Initial Scripts  #
+##############################
+
+process_scripts InitialScripts
+
+#Check if a custom plist was delivered/altered during InitialScripts
+check_for_custom_plist
+
+#We check for Installomator again, to support custom plist swapping
+if $pBuddy -c "Print :Installomator:0" "$BaselineConfig" > /dev/null 2>&1; then
+    install_installomator
+fi
+
+
 #######################
 #   Customizations    #
 #######################
+# Check if we are going to restart. This has to be here, because the Dialog customizations depend on it
+check_restart_option
+
 
 ######################################
 #   Configure List Customizations    #
@@ -862,108 +1035,6 @@ if $forceRestart; then
     configure_dialog_failure_arguments "--timer" "120"
 fi
 
-#############################################
-#   Configure Default Installomator Options #
-#############################################
-
-defaultInstallomatorOptions=(
-    BLOCKING_PROCESS_ACTION=kill
-    NOTIFY=silent
-)
-
-if [ "$dryRun" = 1 ]; then
-    defaultInstallomatorOptions+="DEBUG=2"
-fi
-
-
-########################################################################################################
-########################################################################################################
-##
-##      SCRIPT STARTS HERE
-##
-########################################################################################################
-########################################################################################################
-debug_message "Starting script actions"
-
-#Verify we're running as root
-check_root
-
-#Check if exit condition has been defined
-check_exit_condition
-
-#No falling asleep on the job, bud
-no_sleeping
-
-#Set trap so that things always exit cleanly
-trap cleanup_and_exit 1 2 3 6
-
-#Check if directories for Packages and Scripts exist already.
-#This is useful for testing, or if running the script directly (not the pkg)
-make_directory "$BaselineScripts"
-make_directory "$BaselinePackages"
-
-#Initiate Logging
-initiate_logging
-
-#Setup report
-initiate_report
-
-#############################################
-#   Verify a Configuration File is in Place #
-#############################################
-verify_configuration_file
-
-###########################
-#   Install Installomator #
-###########################
-#If Installomator is going to be used, install it now
-if $pBuddy -c "Print :Installomator:0" "$BaselineConfig" > /dev/null 2>&1; then
-    install_installomator
-fi
-
-#########################
-#   Install SwiftDialog #
-#########################
-install_dialog
-#If swiftDialog still isn't installed, exit with an error
-if [ ! -e "$dialogAppPath" ]; then
-    cleanup_and_exit 1 "ERROR: SwiftDialog failed to install after numerous attempts. Exiting."
-fi
-
-#############################################
-#   Wait until a user is verified logged in #
-#############################################
-wait_for_user
-
-# Get the currently logged in user home folder and UID
-currentUser=$( echo "show State:/Users/ConsoleUser" | scutil | awk '/Name :/ { print $3 }' )
-currentUserUID=$(/usr/bin/id -u "$currentUser")
-userHomeFolder=$(dscl . -read /users/${currentUser} NFSHomeDirectory | cut -d " " -f 2)
-
-#############
-#   Arrays  #
-#############
-
-# Initiate arrays
-dialogList=()
-dialogListItems=()
-failList=()
-successList=()
-
-installomatorLabels=()
-installomatorOptions=()
-
-scriptsToProcess=()
-scriptArguments=()
-
-pkgsToInstall=()
-pkgValidations=()
-
-##############################
-#   Process Initial Scripts  #
-##############################
-
-process_scripts InitialScripts
 
 ###################
 #   Build Arrays  #
