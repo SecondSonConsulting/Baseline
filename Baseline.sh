@@ -485,15 +485,19 @@ function build_dialog_array()
 				report_message "Icon found: $currentIconPath"
 			elif [ -e "$BaselineIcons/$currentIconPath" ]; then
 				report_message "Icon found: $currentIconPath"
-			fi
+			else
+                #If we can't find the local file, report and leave blank
+                report_message "ERROR: Icon key is populated but unable to locate"
+                currentIconPath=""
+            fi
 		else
-			#If we still have nothing just don't set the Icon
-			report_message "ERROR: Icon does not exist, setting to blank"
+			#If no icon key is set, ensure it's blank
+			report_message "No icon set, leaving blank"
 			currentIconPath=""
 		fi
         
         #Generate JSON entry for item
-        #NOTE: We would need to look ahead to determine the last line and omit the ',' for valid JSON, but Dialog doesn't seem to care.. 
+        #NOTE: We would need to look ahead to determine the last line and omit the ',' on the last line for valid JSON, but Dialog doesn't seem to care.. 
         dialogListJson+="{\"title\" : \"$currentDisplayName\", \"icon\" : \"$currentIconPath\", \"status\" : \"wait\"},"
 
         #Done looping. Increase our array value and loop again.

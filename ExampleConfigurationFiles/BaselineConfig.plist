@@ -35,8 +35,6 @@
 		<dict>
 			<key>DisplayName</key>
 			<string>Example Package</string>
-			<key>Icon</key>
-			<string>/System/Library/CoreServices/BridgeVersion.bin</string>
 			<key>PackagePath</key>
 			<string>ExamplePKG.pkg</string>
 			<key>TeamID</key>
