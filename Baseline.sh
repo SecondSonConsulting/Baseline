@@ -944,8 +944,13 @@ function configure_dialog_list_arguments()
     fi
 }
 
+default_message="Feel free to step away, this could take 30 minutes or more."
+if $forceRestart; then
+    default_message+="\n\nYour computer will restart when it's ready for use."
+fi
+
 configure_dialog_list_arguments "--title" "Your computer setup is underway"
-configure_dialog_list_arguments "--message" "Feel free to step away, this could take 30 minutes or more. \n\nYour computer will restart when it's ready for use."
+configure_dialog_list_arguments "--message" "$default_message"
 configure_dialog_list_arguments "--icon" "/System/Library/CoreServices/KeyboardSetupAssistant.app/Contents/Resources/AppIcon.icns"
 configure_dialog_list_arguments "--width" 900
 configure_dialog_list_arguments "--height" 550
