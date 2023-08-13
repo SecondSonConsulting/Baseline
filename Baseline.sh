@@ -944,8 +944,10 @@ function configure_dialog_list_arguments()
     fi
 }
 
+# Adjust language of our list view window depending on whether or not the device will restart
 defaultListMessage="Feel free to step away, this could take 30 minutes or more."
 if $forceRestart; then
+    # Add a line break and a sentence about restarting.
     defaultListMessage+="\n\nYour computer will restart when it's ready for use."
 fi
 
