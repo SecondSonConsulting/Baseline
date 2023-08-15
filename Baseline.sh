@@ -458,15 +458,6 @@ function build_dialog_array()
         dialogList+="$currentDisplayName"
 
 		#Get the icon path if populated in the configuration profile
-		#
-		#Simple version without checks
-        #if $pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig" > /dev/null 2>&1; then
-        #    currentIconPath=$($pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig")
-        #else
-        #    currentIconPath=""
-        #fi
-        #
-        #Longer version with URL/file checks
         if $pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig" > /dev/null 2>&1; then
 			currentIconPath=$($pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig")
 			if [[ ${currentIconPath:0:4} == "http" ]]; then
@@ -975,7 +966,7 @@ check_restart_option
 
 finalListCommand=()
 finalListCommand+="$dialogPath"
-#finalListCommand+="--blurscreen"
+finalListCommand+="--blurscreen"
 finalListCommand+="--button1disabled"
 
 # Read the Dialog List Arguments customizations, if there are any
