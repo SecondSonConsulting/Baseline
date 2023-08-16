@@ -32,6 +32,7 @@ logFile="/var/log/Baseline.log"
 BaselinePath="$BaselineDir/Baseline.sh"
 BaselineScripts="$BaselineDir/Scripts"
 BaselinePackages="$BaselineDir/Packages"
+BaselineIcons="$BaselineDir/Icons"
 BaselineLaunchDaemon="/Library/LaunchDaemons/com.secondsonconsulting.baseline.plist"
 ScriptOutputLog="/var/log/Baseline-ScriptsOutput.log"
 
@@ -43,6 +44,7 @@ installomatorPath="/usr/local/Installomator/Installomator.sh"
 
 #Other stuff
 dialogCommandFile=$(mktemp /var/tmp/baselineDialog.XXXXXX)
+dialogJsonFile=$(mktemp /var/tmp/baselineJson.XXXX)
 expectedDialogTeamID="PWA5E9TQ59"
 
 ########################################################################################################
@@ -161,6 +163,7 @@ function cleanup_and_exit()
     kill "$caffeinatepid"
     dialog_command "quit:" 
     rm_if_exists "$dialogCommandFile"
+    rm_if_exists "$dialogJsonFile"
     if [ "$dryRun" != 1 ] && [ "$cleanupBaselineDirectory" = "true" ] ; then
         rm_if_exists "$BaselineDir"
     fi
@@ -195,6 +198,8 @@ function cleanup_and_restart()
     dialog_command "quit:"
     # Delete dialog command file 
     rm_if_exists "$dialogCommandFile"
+    # Delete dialog json file
+    rm_if_exists "$dialogJsonFile"
   
     # If this isn't a test run, force a restart
     if [ $forceRestart = "false" ]; then
@@ -416,23 +421,24 @@ function process_installomator_labels()
         #Get the display name of the label we're installing. We need this to update the dialog list
         currentDisplayName=$($pBuddy -c "Print :Installomator:${currentIndex}:DisplayName" "$BaselineConfig")
         #Update the dialog window so that this item shows as "pending"
-        dialog_command "listitem: $currentDisplayName: wait"
+        dialog_command "listitem: title: $currentDisplayName, status: wait"
         #Call installomator with our desired options. Default options first, so that they can be overriden by "currentArguments"
         $installomatorPath $currentLabel ${defaultInstallomatorOptions[@]} $currentArguments > /dev/null 2>&1
         installomatorExitCode=$?
         if [ $installomatorExitCode != 0 ]; then
             report_message "Installomator failed to install: $currentLabel - Exit Code: $installomatorExitCode"
-            dialog_command "listitem: $currentDisplayName: fail"
+            dialog_command "listitem: title: $currentDisplayName, status: fail"
             failList+=("$currentDisplayName")
         else
             report_message "Installomator successfully installed: $currentLabel"
-            dialog_command "listitem: $currentDisplayName: success"
+            dialog_command "listitem: title: $currentDisplayName, status: success"
             successList+=("$currentDisplayName")
        fi
         currentIndex=$((currentIndex+1))
     done
 }
 
+# Our main list builder for the Dialog window
 function build_dialog_array()
 {
     ## Usage: Build the dialog array for the given profile configuration key. $1 is the name of the key
@@ -450,6 +456,41 @@ function build_dialog_array()
         #Get the Display Name of the current item
         currentDisplayName=$($pBuddy -c "Print :$configKey:${index}:DisplayName" "$BaselineConfig")
         dialogList+="$currentDisplayName"
+
+		#Get the icon path if populated in the configuration profile
+        if $pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig" > /dev/null 2>&1; then
+			currentIconPath=$($pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig")
+			if [[ ${currentIconPath:0:4} == "http" ]]; then
+				curl --output /dev/null --silent --head --fail ${currentIconPath}
+				currentIconURLResponse=$?
+				if [ "$currentIconURLResponse" != 0 ]; then
+					#Report URL unreachable
+					report_message "ERROR: URL unreachable. Check your URL: $currentIconPath"
+					#Set icon to blank and move on
+					currentIconPath=""
+				else
+					report_message "Icon URL reachable: $currentIconPath"
+				fi
+			#Check of the given icon path exists on disk
+			elif [ -e "$currentIconPath" ]; then
+				report_message "Icon found: $currentIconPath"
+			elif [ -e "$BaselineIcons/$currentIconPath" ]; then
+				report_message "Icon found: $currentIconPath"
+			else
+                #If we can't find the local file, report and leave blank
+                report_message "ERROR: Icon key is populated but unable to locate"
+                currentIconPath=""
+            fi
+		else
+			#If no icon key is set, ensure it's blank
+			report_message "No icon set, leaving blank"
+			currentIconPath=""
+		fi
+        
+        #Generate JSON entry for item
+        #NOTE: We would need to look ahead to determine the last line and omit the ',' on the last line for valid JSON, but Dialog doesn't seem to care.. 
+        dialogListJson+="{\"title\" : \"$currentDisplayName\", \"icon\" : \"$currentIconPath\", \"status\" : \"wait\"},"
+
         #Done looping. Increase our array value and loop again.
         index=$((index+1))
     done
@@ -510,7 +551,7 @@ function process_scripts()
             # Iterate the index up one
             currentIndex=$((currentIndex+1))
             # Report the fail
-            dialog_command "listitem: $currentDisplayName: fail"
+            dialog_command "listitem: title: $currentDisplayName, status: fail"
             failList+=("$currentDisplayName")
             # Bail this pass through the while loop and continue processing next item
             continue
@@ -528,7 +569,7 @@ function process_scripts()
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 # Report the fail
-                dialog_command "listitem: $currentDisplayName: fail"
+                dialog_command "listitem: title: $currentDisplayName, status: fail"
                 failList+=("$currentDisplayName")
                 # Bail this pass through the while loop and continue processing next item
                 continue
@@ -551,18 +592,18 @@ function process_scripts()
         fi
 
         #Update the dialog window so that this item shows as "pending"
-        dialog_command "listitem: $currentDisplayName: wait"
+        dialog_command "listitem: title: $currentDisplayName, status: wait"
 
         #Call our script with our desired options. Default options first, so that they can be overriden by "currentArguments"
         "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
         scriptExitCode=$?
         if [ $scriptExitCode != 0 ]; then
             report_message "Script failed to complete: $currentScript - Exit Code: $scriptExitCode"
-            dialog_command "listitem: $currentDisplayName: fail"
+            dialog_command "listitem: title: $currentDisplayName, status: fail"
             failList+=("$currentDisplayName")
         else
             report_message "Script completed successfully: $currentScript"
-            dialog_command "listitem: $currentDisplayName: success"
+            dialog_command "listitem: title: $currentDisplayName, status: success"
             successList+=("$currentDisplayName")
        fi
 
@@ -636,7 +677,7 @@ function process_pkgs()
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 # Report the fail
-                dialog_command "listitem: $currentDisplayName: fail"
+                dialog_command "listitem: title: $currentDisplayName, status: fail"
                 # Bail this pass through the while loop and continue processing next item
                 continue
             else
@@ -655,7 +696,7 @@ function process_pkgs()
             currentPKG="$BaselinePackages/$currentPKGPath"
         else
             report_message "Package not found $currentPKGPath"
-            dialog_command "listitem: $currentDisplayName: fail"
+            dialog_command "listitem: title: $currentDisplayName, status: fail"
             failList+=("$currentDisplayName")
             currentIndex=$((currentIndex+1))
             continue
@@ -692,7 +733,7 @@ function process_pkgs()
             expectedMD5=""
         fi
         #Update the dialog window so that this item shows as "pending"
-        dialog_command "listitem: $currentDisplayName: wait"
+        dialog_command "listitem: title: $currentDisplayName, status: wait"
         
         ## Package validation happens here
         # Check TeamID, if a value has been provided
@@ -702,12 +743,12 @@ function process_pkgs()
             # Check if actual does not match expected
             if [ "$expectedTeamID" != "$actualTeamID" ]; then
                 report_message "TeamID validation of PKG failed: $currentPKG - Expected: $expectedTeamID Actual: $actualTeamID"
-                dialog_command "listitem: $currentDisplayName: fail"
+                dialog_command "listitem: title: $currentDisplayName, status: fail"
                 failList+=("$currentDisplayName")
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 # Report the fail
-                dialog_command "listitem: $currentDisplayName: fail"
+                dialog_command "listitem: title: $currentDisplayName, status: fail"
                 # Bail this pass through the while loop and continue processing next item
                 continue
             else
@@ -722,12 +763,12 @@ function process_pkgs()
             # Check if actual does not match expected
             if [ "$expectedMD5" != "$actualMD5" ]; then
                 report_message "MD5 validation of PKG failed: $currentPKG - Expected: $expectedMD5 Actual: $actualMD5"
-                dialog_command "listitem: $currentDisplayName: fail"
+                dialog_command "listitem: title: $currentDisplayName, status: fail"
                 failList+=("$currentDisplayName")
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 # Report the fail
-                dialog_command "listitem: $currentDisplayName: fail"
+                dialog_command "listitem: title: $currentDisplayName, status: fail"
                 # Bail this pass through the while loop and continue processing next item
                 continue
             else
@@ -742,17 +783,29 @@ function process_pkgs()
         # Verify the install completed successfully
         if [ $pkgExitCode != 0 ]; then
             report_message "Package failed to complete: $currentPKG - Exit Code: $pkgExitCode"
-            dialog_command "listitem: $currentDisplayName: fail"
+            dialog_command "listitem: title: $currentDisplayName, status: fail"
             failList+=("$currentDisplayName")
         else
             report_message "Package completed successfully: $currentPKG"
-            dialog_command "listitem: $currentDisplayName: success"
+            dialog_command "listitem: title: $currentDisplayName, status: success"
             successList+=("$currentDisplayName")
         fi
         debug_message "Output of the install package command: $pkgInstallerOutput"
         # Iterate to the next index item, and continue our loop
         currentIndex=$((currentIndex+1))
     done
+}
+
+function build_dialog_json_file()
+{
+    /bin/echo "{\"listitem\" : [" >> $dialogJsonFile
+    sleep .1
+    for item in $dialogListJson; do
+        /bin/echo "$item" >> $dialogJsonFile
+        sleep .1
+    done
+    /bin/echo "]}" >> $dialogJsonFile
+    sleep .1
 }
 
 function build_dialog_list_options()
@@ -801,7 +854,6 @@ defaultInstallomatorOptions=(
 if [ "$dryRun" = 1 ]; then
     defaultInstallomatorOptions+="DEBUG=2"
 fi
-
 
 ########################################################################################################
 ########################################################################################################
@@ -874,6 +926,7 @@ userHomeFolder=$(dscl . -read /users/${currentUser} NFSHomeDirectory | cut -d " 
 # Initiate arrays
 dialogList=()
 dialogListItems=()
+dialogListJson=()
 failList=()
 successList=()
 
@@ -899,7 +952,6 @@ check_for_custom_plist
 if $pBuddy -c "Print :Installomator:0" "$BaselineConfig" > /dev/null 2>&1; then
     install_installomator
 fi
-
 
 #######################
 #   Customizations    #
@@ -1051,7 +1103,7 @@ fi
 build_dialog_array Installomator
 build_dialog_array Packages
 build_dialog_array Scripts
-
+build_dialog_json_file
 build_dialog_list_options
 
 
@@ -1065,7 +1117,7 @@ until pgrep -q -x "Dialog"; do
     if [ "$dialogAttemptCount" -le 10 ]; then
         ${finalListCommand[@]} \
         --commandfile "$dialogCommandFile" \
-        ${dialogListItems[@]} \
+        --jsonfile "$dialogJsonFile" \
         & sleep 1
         dialogAttemptCount=$(( dialogAttemptCount +1 ))
     else
