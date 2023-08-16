@@ -493,6 +493,7 @@ function build_dialog_array()
 
         #Done looping. Increase our array value and loop again.
         index=$((index+1))
+        progressBarTotal=$((progressBarTotal+1))
     done
 }
 
@@ -842,6 +843,38 @@ function check_restart_option()
     fi
 }
 
+function check_progress_option()
+{
+    # Set variable for whether or not we'll display a progress bar. Defaults to 'false'
+    displayProgressBarSetting=$($pBuddy -c "Print :DisplayProgressBar" "$BaselineConfig")
+
+    if  [ $displayProgressBarSetting = "true" ]; then
+        displayProgressBar="true"
+    else
+        displayProgressBar="false"
+    fi
+}
+
+function increment_progress_bar()
+{
+    if [ "$displayProgressBar" != "true" ]; then
+        return
+    fi
+
+    progressBarValue=$((progressBarValue+1))
+    progressBarPercentage=$((progressBarValue*100/progressBarTotal))
+    dialog_command "progress: $progressBarPercentage"
+}
+
+function set_progressbar_text()
+{
+    if [ "$displayProgressBar" != "true" ]; then
+        return
+    fi
+
+    dialog_command "progresstext: $1"
+}
+
 #############################################
 #   Configure Default Installomator Options #
 #############################################
@@ -939,6 +972,17 @@ scriptArguments=()
 pkgsToInstall=()
 pkgValidations=()
 
+######################
+# Integers and Bools #
+######################
+
+# Initiate integers
+progressBarValue=0
+progressBarTotal=0
+
+# Initiate bools
+displayProgressBar="false"
+
 ##############################
 #   Process Initial Scripts  #
 ##############################
@@ -958,6 +1002,9 @@ fi
 #######################
 # Check if we are going to restart. This has to be here, because the Dialog customizations depend on it
 check_restart_option
+
+# Check if we should display a progress bar under the UI
+check_progress_option
 
 
 ######################################
