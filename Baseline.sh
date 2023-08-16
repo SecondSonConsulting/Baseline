@@ -596,7 +596,11 @@ function process_scripts()
 
         #Update the dialog window so that this item shows as "pending"
         dialog_command "listitem: title: $currentDisplayName, status: wait"
-        set_progressbar_text "Running: $currentDisplayName"
+
+        #Only set the progress label if we're processing Scripts, not InitialScripts since users won't see those
+        if [ "$1" = "Scripts" ]; then
+            set_progressbar_text "Running: $currentDisplayName"
+        fi
 
         #Call our script with our desired options. Default options first, so that they can be overriden by "currentArguments"
         "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
