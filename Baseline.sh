@@ -553,6 +553,7 @@ function process_scripts()
             report_message "ERROR: Script does not exist: $currentScript"
             # Iterate the index up one
             currentIndex=$((currentIndex+1))
+            increment_progress_bar
             # Report the fail
             dialog_command "listitem: title: $currentDisplayName, status: fail"
             failList+=("$currentDisplayName")
@@ -571,6 +572,10 @@ function process_scripts()
                 report_message "ERROR: MD5 value mismatch. Expected: $expectedMD5 Actual: $actualMD5"
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
+                # Only increment the progress bar if we're processing Scripts, not InitialScripts since users won't see those
+                if [ "$1" = "Scripts" ]; then
+                    increment_progress_bar
+                fi
                 # Report the fail
                 dialog_command "listitem: title: $currentDisplayName, status: fail"
                 failList+=("$currentDisplayName")
