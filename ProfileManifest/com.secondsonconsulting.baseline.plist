@@ -417,6 +417,16 @@ A profile can consist of payloads with different version numbers. For example, c
 		</dict>
 		<dict>
 			<key>pfm_description</key>
+			<string>This setting controls whether Baseline displays the current item being processed under the progress bar. Default is false.</string>
+			<key>pfm_name</key>
+			<string>DisplayProgressBarLabel</string>
+			<key>pfm_title</key>
+			<string>DisplayProgressBarLabel</string>
+			<key>pfm_type</key>
+			<string>boolean</string>
+		</dict>
+		<dict>
+			<key>pfm_description</key>
 			<string>SwiftDialog options for the primary Baseline progress list window.</string>
 			<key>pfm_name</key>
 			<string>DialogListOptions</string>

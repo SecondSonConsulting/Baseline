@@ -843,7 +843,7 @@ function check_restart_option()
     fi
 }
 
-function check_progress_option()
+function check_progress_options()
 {
     # Set variable for whether or not we'll display a progress bar. Defaults to 'false'
     displayProgressBarSetting=$($pBuddy -c "Print :DisplayProgressBar" "$BaselineConfig")
@@ -852,6 +852,15 @@ function check_progress_option()
         displayProgressBar="true"
     else
         displayProgressBar="false"
+    fi
+
+    # Set variable for whether or not we'll display a progress bar label. Defaults to 'false'
+    displayProgressBarLabelSetting=$($pBuddy -c "Print :DisplayProgressBarLabel" "$BaselineConfig")
+
+    if  [ $displayProgressBarLabelSetting = "true" ]; then
+        displayProgressBarLabel="true"
+    else
+        displayProgressBarLabel="false"
     fi
 }
 
@@ -982,6 +991,7 @@ progressBarTotal=0
 
 # Initiate bools
 displayProgressBar="false"
+displayProgressBarLabel="false"
 
 ##############################
 #   Process Initial Scripts  #
@@ -1004,7 +1014,7 @@ fi
 check_restart_option
 
 # Check if we should display a progress bar under the UI
-check_progress_option
+check_progress_options
 
 
 ######################################
@@ -1056,6 +1066,13 @@ configure_dialog_list_arguments "--icon" "/System/Library/CoreServices/KeyboardS
 configure_dialog_list_arguments "--width" 900
 configure_dialog_list_arguments "--height" 550
 configure_dialog_list_arguments "--quitkey" ']'
+
+if [ "$displayProgressBar" = "true" ]; then
+    configure_dialog_list_arguments "--progressbar" "0"
+    if [ "$displayProgressBarLabel" = "true" ]; then
+        configure_dialog_list_arguments "--progresstext" "Starting shortly..."
+    fi
+fi
 
 #########################################
 #   Configure Success Customizations    #
