@@ -1220,6 +1220,11 @@ done
 #   Install the things  #
 #########################
 
+# Progress Bar will be pulsing until a value is set
+if [ "$displayProgressBar" = "true" ]; then
+    dialog_command "progress: 0"
+fi
+
 process_installomator_labels
 
 process_pkgs
