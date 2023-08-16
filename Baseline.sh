@@ -1091,7 +1091,7 @@ configure_dialog_list_arguments "--height" 550
 configure_dialog_list_arguments "--quitkey" ']'
 
 if [ "$displayProgressBar" = "true" ]; then
-    configure_dialog_list_arguments "--progressbar" "0"
+    configure_dialog_list_arguments "--progress"
     if [ "$displayProgressBarLabel" = "true" ]; then
         configure_dialog_list_arguments "--progresstext" "Starting shortly..."
     fi
