@@ -891,7 +891,7 @@ function increment_progress_bar()
 
 function set_progressbar_text()
 {
-    if [ "$displayProgressBar" != "true" ]; then
+    if [ "$displayProgressBarLabel" != "true" ]; then
         return
     fi
 
