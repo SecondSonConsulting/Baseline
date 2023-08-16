@@ -491,7 +491,7 @@ function build_dialog_array()
         
         #Generate JSON entry for item
         #NOTE: We would need to look ahead to determine the last line and omit the ',' on the last line for valid JSON, but Dialog doesn't seem to care.. 
-        dialogListJson+="{\"title\" : \"$currentDisplayName\", \"icon\" : \"$currentIconPath\", \"status\" : \"wait\"},"
+        dialogListJson+="{\"title\" : \"$currentDisplayName\", \"icon\" : \"$currentIconPath\", \"status\" : \"\"},"
 
         #Done looping. Increase our array value and loop again.
         index=$((index+1))
