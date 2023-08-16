@@ -422,6 +422,7 @@ function process_installomator_labels()
         currentDisplayName=$($pBuddy -c "Print :Installomator:${currentIndex}:DisplayName" "$BaselineConfig")
         #Update the dialog window so that this item shows as "pending"
         dialog_command "listitem: title: $currentDisplayName, status: wait"
+        set_progressbar_text "Installing: $currentDisplayName"
         #Call installomator with our desired options. Default options first, so that they can be overriden by "currentArguments"
         $installomatorPath $currentLabel ${defaultInstallomatorOptions[@]} $currentArguments > /dev/null 2>&1
         installomatorExitCode=$?
@@ -435,6 +436,7 @@ function process_installomator_labels()
             successList+=("$currentDisplayName")
        fi
         currentIndex=$((currentIndex+1))
+        increment_progress_bar
     done
 }
 
@@ -594,6 +596,7 @@ function process_scripts()
 
         #Update the dialog window so that this item shows as "pending"
         dialog_command "listitem: title: $currentDisplayName, status: wait"
+        set_progressbar_text "Running: $currentDisplayName"
 
         #Call our script with our desired options. Default options first, so that they can be overriden by "currentArguments"
         "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
@@ -610,6 +613,11 @@ function process_scripts()
 
        #Iterate index for next loop
         currentIndex=$((currentIndex+1))
+
+        #Only increment the progress bar if we're processing Scripts, not InitialScripts since users won't see those
+        if [ "$1" = "Scripts" ]; then
+            increment_progress_bar
+        fi
     done
 }
 
@@ -677,6 +685,7 @@ function process_pkgs()
                 report_message "ERROR: PKG failed to download: $currentPKGPath"
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
+                increment_progress_bar
                 # Report the fail
                 dialog_command "listitem: title: $currentDisplayName, status: fail"
                 # Bail this pass through the while loop and continue processing next item
@@ -700,6 +709,7 @@ function process_pkgs()
             dialog_command "listitem: title: $currentDisplayName, status: fail"
             failList+=("$currentDisplayName")
             currentIndex=$((currentIndex+1))
+            increment_progress_bar
             continue
         fi
 
@@ -735,7 +745,8 @@ function process_pkgs()
         fi
         #Update the dialog window so that this item shows as "pending"
         dialog_command "listitem: title: $currentDisplayName, status: wait"
-        
+        set_progressbar_text "Installing: $currentDisplayName"
+
         ## Package validation happens here
         # Check TeamID, if a value has been provided
         if [ -n "$expectedTeamID" ]; then
@@ -748,6 +759,7 @@ function process_pkgs()
                 failList+=("$currentDisplayName")
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
+                increment_progress_bar
                 # Report the fail
                 dialog_command "listitem: title: $currentDisplayName, status: fail"
                 # Bail this pass through the while loop and continue processing next item
@@ -768,6 +780,7 @@ function process_pkgs()
                 failList+=("$currentDisplayName")
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
+                increment_progress_bar
                 # Report the fail
                 dialog_command "listitem: title: $currentDisplayName, status: fail"
                 # Bail this pass through the while loop and continue processing next item
@@ -794,6 +807,7 @@ function process_pkgs()
         debug_message "Output of the install package command: $pkgInstallerOutput"
         # Iterate to the next index item, and continue our loop
         currentIndex=$((currentIndex+1))
+        increment_progress_bar
     done
 }
 
