@@ -830,6 +830,10 @@ function build_dialog_json_file()
     done
     /bin/echo "]}" >> $dialogJsonFile
     sleep .1
+
+    # Work-around permission issues for swiftDialog
+    # 'ERROR: File not found : /var/tmp/baselineJson.XXXX'
+    chmod 644 "$dialogJsonFile"
 }
 
 function build_dialog_list_options()
