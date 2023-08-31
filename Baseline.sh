@@ -161,7 +161,7 @@ function cleanup_and_exit()
     done
 
     kill "$caffeinatepid"
-    dialog_command "quit:"
+    dialog_command "quit:" 
     rm_if_exists "$dialogCommandFile"
     rm_if_exists "$dialogJsonFile"
     if [ "$dryRun" != 1 ] && [ "$cleanupBaselineDirectory" = "true" ] ; then
@@ -196,11 +196,11 @@ function cleanup_and_restart()
     kill "$caffeinatepid"
     # Close dialog window
     dialog_command "quit:"
-    # Delete dialog command file
+    # Delete dialog command file 
     rm_if_exists "$dialogCommandFile"
     # Delete dialog json file
     rm_if_exists "$dialogJsonFile"
-
+ 
     # If this isn't a test run, force a restart
     if [ $forceRestart = "false" ]; then
         if  [ $cleanupBaselineDirectory = "true" ]; then
