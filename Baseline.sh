@@ -360,7 +360,7 @@ function verify_configuration_file()
 {
     #We need to make sure our configuration file is in place. By the time the user logs in, this should have happened.
     debug_message "Verifying configuration file. Failure here probably means an MDM profile hasn't been properly scoped, or there's a problem with the MDM delivering the profile."
-  
+    
     #Set timeout variables
     configFileTimeout=600
     configFileWaiting=0
@@ -488,7 +488,7 @@ function build_dialog_array()
 			report_message "No icon set, leaving blank"
 			currentIconPath=""
 		fi
-	
+        
         #Generate JSON entry for item
         #NOTE: We would need to look ahead to determine the last line and omit the ',' on the last line for valid JSON, but Dialog doesn't seem to care.. 
         dialogListJson+="{\"title\" : \"$currentDisplayName\", \"icon\" : \"$currentIconPath\", \"status\" : \"\"},"
@@ -670,7 +670,7 @@ function process_pkgs()
         currentDisplayName=$($pBuddy -c "Print :Packages:${currentIndex}:DisplayName" "$BaselineConfig")
         #Set the current package path
         currentPKGPath=$($pBuddy -c "Print :Packages:${currentIndex}:PackagePath" "$BaselineConfig")
-		
+        
         ##Here is where we begin checking what kind of PKG was defined, and how to process it
         ##The end result of this chunk of code, is that we have a valid path to a PKG on the file system
         ##Else we bail and continue looping to install the next item
@@ -703,7 +703,7 @@ function process_pkgs()
                 debug_message "PKG downloaded successfully: $currentPKGPath downloaded to $currentPKG"
             fi
         fi
-	
+        
         # Check if the pkg exists
         if [ -e "$currentPKG" ]; then
             debug_message "PKG found: $currentPKG"
@@ -777,7 +777,7 @@ function process_pkgs()
                 report_message "TeamID of PKG validated: $currentPKG $expectedTeamID"
             fi
         fi
-		
+        
         # Check MD5, if a value has been provided
         if [ -n "$expectedMD5" ]; then
             #Get MD5 for the current PKG
