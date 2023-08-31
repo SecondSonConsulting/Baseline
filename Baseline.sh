@@ -200,7 +200,7 @@ function cleanup_and_restart()
     rm_if_exists "$dialogCommandFile"
     # Delete dialog json file
     rm_if_exists "$dialogJsonFile"
- 
+  
     # If this isn't a test run, force a restart
     if [ $forceRestart = "false" ]; then
         if  [ $cleanupBaselineDirectory = "true" ]; then
@@ -309,7 +309,7 @@ function install_installomator()
             installomatorInstallAttempts=$((installomatorInstallAttempts+1))
         fi
         # Remove the temporary working directory when done
-        rm_if_exists "$tempDirectory"
+        rm_if_exists "$tempDirectory" 
     done
 }
 
@@ -327,7 +327,7 @@ function wait_for_user()
         if [ "$currentUser" = "root" ] \
             || [ "$currentUser" = "loginwindow" ] \
             || [ "$currentUser" = "_mbsetupuser" ] \
-            || [ -z "$currentUser" ]
+            || [ -z "$currentUser" ] 
         then
         #If we aren't verified yet, wait 1 second and try again
         sleep 1
@@ -360,7 +360,7 @@ function verify_configuration_file()
 {
     #We need to make sure our configuration file is in place. By the time the user logs in, this should have happened.
     debug_message "Verifying configuration file. Failure here probably means an MDM profile hasn't been properly scoped, or there's a problem with the MDM delivering the profile."
-
+	
     #Set timeout variables
     configFileTimeout=600
     configFileWaiting=0
@@ -488,9 +488,9 @@ function build_dialog_array()
 			report_message "No icon set, leaving blank"
 			currentIconPath=""
 		fi
-
+		
         #Generate JSON entry for item
-        #NOTE: We would need to look ahead to determine the last line and omit the ',' on the last line for valid JSON, but Dialog doesn't seem to care..
+        #NOTE: We would need to look ahead to determine the last line and omit the ',' on the last line for valid JSON, but Dialog doesn't seem to care.. 
         dialogListJson+="{\"title\" : \"$currentDisplayName\", \"icon\" : \"$currentIconPath\", \"status\" : \"\"},"
 
         #Done looping. Increase our array value and loop again.
@@ -670,7 +670,7 @@ function process_pkgs()
         currentDisplayName=$($pBuddy -c "Print :Packages:${currentIndex}:DisplayName" "$BaselineConfig")
         #Set the current package path
         currentPKGPath=$($pBuddy -c "Print :Packages:${currentIndex}:PackagePath" "$BaselineConfig")
-
+		
         ##Here is where we begin checking what kind of PKG was defined, and how to process it
         ##The end result of this chunk of code, is that we have a valid path to a PKG on the file system
         ##Else we bail and continue looping to install the next item
@@ -703,7 +703,7 @@ function process_pkgs()
                 debug_message "PKG downloaded successfully: $currentPKGPath downloaded to $currentPKG"
             fi
         fi
-
+		
         # Check if the pkg exists
         if [ -e "$currentPKG" ]; then
             debug_message "PKG found: $currentPKG"
