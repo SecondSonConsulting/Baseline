@@ -422,6 +422,7 @@ function process_installomator_labels()
         currentDisplayName=$($pBuddy -c "Print :Installomator:${currentIndex}:DisplayName" "$BaselineConfig")
         #Update the dialog window so that this item shows as "pending"
         dialog_command "listitem: title: $currentDisplayName, status: wait"
+        set_progressbar_text "Installing: $currentDisplayName"
         #Call installomator with our desired options. Default options first, so that they can be overriden by "currentArguments"
         $installomatorPath $currentLabel ${defaultInstallomatorOptions[@]} $currentArguments > /dev/null 2>&1
         installomatorExitCode=$?
@@ -435,6 +436,7 @@ function process_installomator_labels()
             successList+=("$currentDisplayName")
        fi
         currentIndex=$((currentIndex+1))
+        increment_progress_bar
     done
 }
 
@@ -489,10 +491,11 @@ function build_dialog_array()
         
         #Generate JSON entry for item
         #NOTE: We would need to look ahead to determine the last line and omit the ',' on the last line for valid JSON, but Dialog doesn't seem to care.. 
-        dialogListJson+="{\"title\" : \"$currentDisplayName\", \"icon\" : \"$currentIconPath\", \"status\" : \"wait\"},"
+        dialogListJson+="{\"title\" : \"$currentDisplayName\", \"icon\" : \"$currentIconPath\", \"status\" : \"\"},"
 
         #Done looping. Increase our array value and loop again.
         index=$((index+1))
+        progressBarTotal=$((progressBarTotal+1))
     done
 }
 
@@ -550,6 +553,7 @@ function process_scripts()
             report_message "ERROR: Script does not exist: $currentScript"
             # Iterate the index up one
             currentIndex=$((currentIndex+1))
+            increment_progress_bar
             # Report the fail
             dialog_command "listitem: title: $currentDisplayName, status: fail"
             failList+=("$currentDisplayName")
@@ -568,6 +572,10 @@ function process_scripts()
                 report_message "ERROR: MD5 value mismatch. Expected: $expectedMD5 Actual: $actualMD5"
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
+                # Only increment the progress bar if we're processing Scripts, not InitialScripts since users won't see those
+                if [ "$1" = "Scripts" ]; then
+                    increment_progress_bar
+                fi
                 # Report the fail
                 dialog_command "listitem: title: $currentDisplayName, status: fail"
                 failList+=("$currentDisplayName")
@@ -594,6 +602,11 @@ function process_scripts()
         #Update the dialog window so that this item shows as "pending"
         dialog_command "listitem: title: $currentDisplayName, status: wait"
 
+        #Only set the progress label if we're processing Scripts, not InitialScripts since users won't see those
+        if [ "$1" = "Scripts" ]; then
+            set_progressbar_text "Running: $currentDisplayName"
+        fi
+
         #Call our script with our desired options. Default options first, so that they can be overriden by "currentArguments"
         "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
         scriptExitCode=$?
@@ -609,6 +622,11 @@ function process_scripts()
 
        #Iterate index for next loop
         currentIndex=$((currentIndex+1))
+
+        #Only increment the progress bar if we're processing Scripts, not InitialScripts since users won't see those
+        if [ "$1" = "Scripts" ]; then
+            increment_progress_bar
+        fi
     done
 }
 
@@ -676,6 +694,7 @@ function process_pkgs()
                 report_message "ERROR: PKG failed to download: $currentPKGPath"
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
+                increment_progress_bar
                 # Report the fail
                 dialog_command "listitem: title: $currentDisplayName, status: fail"
                 # Bail this pass through the while loop and continue processing next item
@@ -699,6 +718,7 @@ function process_pkgs()
             dialog_command "listitem: title: $currentDisplayName, status: fail"
             failList+=("$currentDisplayName")
             currentIndex=$((currentIndex+1))
+            increment_progress_bar
             continue
         fi
 
@@ -734,7 +754,8 @@ function process_pkgs()
         fi
         #Update the dialog window so that this item shows as "pending"
         dialog_command "listitem: title: $currentDisplayName, status: wait"
-        
+        set_progressbar_text "Installing: $currentDisplayName"
+
         ## Package validation happens here
         # Check TeamID, if a value has been provided
         if [ -n "$expectedTeamID" ]; then
@@ -747,6 +768,7 @@ function process_pkgs()
                 failList+=("$currentDisplayName")
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
+                increment_progress_bar
                 # Report the fail
                 dialog_command "listitem: title: $currentDisplayName, status: fail"
                 # Bail this pass through the while loop and continue processing next item
@@ -767,6 +789,7 @@ function process_pkgs()
                 failList+=("$currentDisplayName")
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
+                increment_progress_bar
                 # Report the fail
                 dialog_command "listitem: title: $currentDisplayName, status: fail"
                 # Bail this pass through the while loop and continue processing next item
@@ -793,6 +816,7 @@ function process_pkgs()
         debug_message "Output of the install package command: $pkgInstallerOutput"
         # Iterate to the next index item, and continue our loop
         currentIndex=$((currentIndex+1))
+        increment_progress_bar
     done
 }
 
@@ -806,6 +830,10 @@ function build_dialog_json_file()
     done
     /bin/echo "]}" >> $dialogJsonFile
     sleep .1
+
+    # Work-around permission issues for swiftDialog
+    # 'ERROR: File not found : /var/tmp/baselineJson.XXXX'
+    chmod 644 "$dialogJsonFile"
 }
 
 function build_dialog_list_options()
@@ -840,6 +868,47 @@ function check_restart_option()
     else
         forceRestart="true"
     fi
+}
+
+function check_progress_options()
+{
+    # Set variable for whether or not we'll display a progress bar. Defaults to 'false'
+    displayProgressBarSetting=$($pBuddy -c "Print :DisplayProgressBar" "$BaselineConfig")
+
+    if  [ $displayProgressBarSetting = "true" ]; then
+        displayProgressBar="true"
+    else
+        displayProgressBar="false"
+    fi
+
+    # Set variable for whether or not we'll display a progress bar label. Defaults to 'false'
+    displayProgressBarLabelSetting=$($pBuddy -c "Print :DisplayProgressBarLabel" "$BaselineConfig")
+
+    if  [ $displayProgressBarLabelSetting = "true" ]; then
+        displayProgressBarLabel="true"
+    else
+        displayProgressBarLabel="false"
+    fi
+}
+
+function increment_progress_bar()
+{
+    if [ "$displayProgressBar" != "true" ]; then
+        return
+    fi
+
+    progressBarValue=$((progressBarValue+1))
+    progressBarPercentage=$((progressBarValue*100/progressBarTotal))
+    dialog_command "progress: $progressBarPercentage"
+}
+
+function set_progressbar_text()
+{
+    if [ "$displayProgressBarLabel" != "true" ]; then
+        return
+    fi
+
+    dialog_command "progresstext: $1"
 }
 
 #############################################
@@ -939,6 +1008,18 @@ scriptArguments=()
 pkgsToInstall=()
 pkgValidations=()
 
+######################
+# Integers and Bools #
+######################
+
+# Initiate integers
+progressBarValue=0
+progressBarTotal=0
+
+# Initiate bools
+displayProgressBar="false"
+displayProgressBarLabel="false"
+
 ##############################
 #   Process Initial Scripts  #
 ##############################
@@ -958,6 +1039,9 @@ fi
 #######################
 # Check if we are going to restart. This has to be here, because the Dialog customizations depend on it
 check_restart_option
+
+# Check if we should display a progress bar under the UI
+check_progress_options
 
 
 ######################################
@@ -1009,6 +1093,13 @@ configure_dialog_list_arguments "--icon" "/System/Library/CoreServices/KeyboardS
 configure_dialog_list_arguments "--width" 900
 configure_dialog_list_arguments "--height" 550
 configure_dialog_list_arguments "--quitkey" ']'
+
+if [ "$displayProgressBar" = "true" ]; then
+    configure_dialog_list_arguments "--progress"
+    if [ "$displayProgressBarLabel" = "true" ]; then
+        configure_dialog_list_arguments "--progresstext" "Starting shortly..."
+    fi
+fi
 
 #########################################
 #   Configure Success Customizations    #
@@ -1128,6 +1219,11 @@ done
 #########################
 #   Install the things  #
 #########################
+
+# Progress Bar will be pulsing until a value is set
+if [ "$displayProgressBar" = "true" ]; then
+    dialog_command "progress: 1"
+fi
 
 process_installomator_labels
 
