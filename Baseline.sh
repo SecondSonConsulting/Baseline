@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="v.1.2.1"
+scriptVersion="v.1.3beta1"
 
 ########################################################################################################
 ########################################################################################################
@@ -201,13 +201,20 @@ function cleanup_and_restart()
     # Delete dialog json file
     rm_if_exists "$dialogJsonFile"
   
-    # If this isn't a test run, force a restart
+    # Determine exit configuration
+    # If ForceRestart is set to false
     if [ $forceRestart = "false" ]; then
         if  [ $cleanupBaselineDirectory = "true" ]; then
             rm_if_exists "$BaselineDir"
         fi
         echo "Force Restart is set to false. Exiting"
         exit "$1"
+    # If Force Log Out is set to true
+    elif [ $forceLogOut = "true" ]; then
+        echo "Force Log Out is set to true. Exiting"
+        osascript -e "tell application \"/System/Library/CoreServices/loginwindow.app\" to «event aevtrlgo»"
+        exit "$1"
+    # If the script is in DryRun mode
     elif [ "$dryRun" = 1 ]; then
         echo "this is where <shutdown -r now> would go"
         exit "$1"
@@ -286,30 +293,35 @@ function install_installomator()
     # Check for Installomator and install if not found. We'll try 10 times before exiting the script with a fail.
     installomatorInstallAttempts=0
     while [ ! -e "$installomatorPath" ] && [ "$installomatorInstallAttempts" -lt 10 ]; do
-        # Get the URL of the latest PKG From the Installomator GitHub repo
-        # Expected Team ID of the downloaded PKG
-        installomatorURL=$(curl --silent --fail "https://api.github.com/repos/Installomator/Installomator/releases/latest" | awk -F '"' "/browser_download_url/ && /pkg\"/ { print \$4; exit }")
-        expectedTeamID="JME5BW3F3R"
-        log_message "Installomator not found. Installing."
-        # Create temporary working directory
-        workDirectory=$( /usr/bin/basename "$0" )
-        tempDirectory=$( /usr/bin/mktemp -d "/private/tmp/$workDirectory.XXXXXX" )
-        # Download the installer package
-        /usr/bin/curl --location --silent "$installomatorURL" -o "$tempDirectory/Installomator.pkg"
-        # Verify the download
-        teamID=$(/usr/sbin/spctl -a -vv -t install "$tempDirectory/Installomator.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
-        # Install the package if Team ID validates
-        if [ "$expectedTeamID" = "$teamID" ]; then
-            /usr/sbin/installer -pkg "$tempDirectory/Installomator.pkg" -target /  > /dev/null 2>&1
-            installomatorInstallExitCode=$?
-        fi
-        if [ ! -e "$installomatorPath" ]; then
-            log_message "Installomator installation failed."
-            sleep 5
-            installomatorInstallAttempts=$((installomatorInstallAttempts+1))
-        fi
-        # Remove the temporary working directory when done
-        rm_if_exists "$tempDirectory"  
+        # Check if there is a local Installomator.pkg, and if so run it.
+        if [ -e "${BaselinePackages}/Installomator.pkg" ]; then
+            /usr/sbin/installer -pkg "${BaselinePackages}/Installomator.pkg" -target /  > /dev/null 2>&1
+        else
+            # Get the URL of the latest PKG From the Installomator GitHub repo
+            # Expected Team ID of the downloaded PKG
+            installomatorURL=$(curl --silent -L --fail "https://api.github.com/repos/Installomator/Installomator/releases/latest" | awk -F '"' "/browser_download_url/ && /pkg\"/ { print \$4; exit }")
+            expectedTeamID="JME5BW3F3R"
+            log_message "Installomator not found. Installing."
+            # Create temporary working directory
+            workDirectory=$( /usr/bin/basename "$0" )
+            tempDirectory=$( /usr/bin/mktemp -d "/private/tmp/$workDirectory.XXXXXX" )
+            # Download the installer package
+            /usr/bin/curl --location --silent "$installomatorURL" -o "$tempDirectory/Installomator.pkg"
+            # Verify the download
+            teamID=$(/usr/sbin/spctl -a -vv -t install "$tempDirectory/Installomator.pkg" 2>&1 | awk '/origin=/ {print $NF }' | tr -d '()')
+            # Install the package if Team ID validates
+            if [ "$expectedTeamID" = "$teamID" ]; then
+                /usr/sbin/installer -pkg "$tempDirectory/Installomator.pkg" -target /  > /dev/null 2>&1
+                installomatorInstallExitCode=$?
+            fi
+            if [ ! -e "$installomatorPath" ]; then
+                log_message "Installomator installation failed."
+                sleep 5
+                installomatorInstallAttempts=$((installomatorInstallAttempts+1))
+            fi
+            # Remove the temporary working directory when done
+            rm_if_exists "$tempDirectory"
+        fi  
     done
 }
 
@@ -422,7 +434,7 @@ function process_installomator_labels()
         currentDisplayName=$($pBuddy -c "Print :Installomator:${currentIndex}:DisplayName" "$BaselineConfig")
         #Update the dialog window so that this item shows as "pending"
         dialog_command "listitem: title: $currentDisplayName, status: wait"
-        set_progressbar_text "Installing: $currentDisplayName"
+        set_progressbar_text "$currentDisplayName"
         #Call installomator with our desired options. Default options first, so that they can be overriden by "currentArguments"
         $installomatorPath $currentLabel ${defaultInstallomatorOptions[@]} $currentArguments > /dev/null 2>&1
         installomatorExitCode=$?
@@ -463,24 +475,16 @@ function build_dialog_array()
         if $pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig" > /dev/null 2>&1; then
 			currentIconPath=$($pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig")
 			if [[ ${currentIconPath:0:4} == "http" ]]; then
-				curl --output /dev/null --silent --head --fail ${currentIconPath}
-				currentIconURLResponse=$?
-				if [ "$currentIconURLResponse" != 0 ]; then
-					#Report URL unreachable
-					report_message "ERROR: URL unreachable. Check your URL: $currentIconPath"
-					#Set icon to blank and move on
-					currentIconPath=""
-				else
-					report_message "Icon URL reachable: $currentIconPath"
-				fi
+                report_message "Icon set to URL: $currentIconPath"
 			#Check of the given icon path exists on disk
 			elif [ -e "$currentIconPath" ]; then
 				report_message "Icon found: $currentIconPath"
 			elif [ -e "$BaselineIcons/$currentIconPath" ]; then
 				report_message "Icon found: $currentIconPath"
+                currentIconPath="$BaselineIcons/$currentIconPath"
 			else
                 #If we can't find the local file, report and leave blank
-                report_message "ERROR: Icon key is populated but unable to locate"
+                report_message "ERROR: Icon key cannot be located: $currentIconPath"
                 currentIconPath=""
             fi
 		else
@@ -490,7 +494,7 @@ function build_dialog_array()
 		fi
         
         #Generate JSON entry for item
-        #NOTE: We would need to look ahead to determine the last line and omit the ',' on the last line for valid JSON, but Dialog doesn't seem to care.. 
+        #NOTE: We will strip out the final comma later to ensure a valid JSON
         dialogListJson+="{\"title\" : \"$currentDisplayName\", \"icon\" : \"$currentIconPath\", \"status\" : \"\"},"
 
         #Done looping. Increase our array value and loop again.
@@ -604,7 +608,7 @@ function process_scripts()
 
         #Only set the progress label if we're processing Scripts, not InitialScripts since users won't see those
         if [ "$1" = "Scripts" ]; then
-            set_progressbar_text "Running: $currentDisplayName"
+            set_progressbar_text "$currentDisplayName"
         fi
 
         #Call our script with our desired options. Default options first, so that they can be overriden by "currentArguments"
@@ -754,7 +758,7 @@ function process_pkgs()
         fi
         #Update the dialog window so that this item shows as "pending"
         dialog_command "listitem: title: $currentDisplayName, status: wait"
-        set_progressbar_text "Installing: $currentDisplayName"
+        set_progressbar_text "$currentDisplayName"
 
         ## Package validation happens here
         # Check TeamID, if a value has been provided
@@ -822,17 +826,19 @@ function process_pkgs()
 
 function build_dialog_json_file()
 {
+    # Initiate Json file
     /bin/echo "{\"listitem\" : [" >> $dialogJsonFile
-    sleep .1
-    for item in $dialogListJson; do
-        /bin/echo "$item" >> $dialogJsonFile
-        sleep .1
+    # For each item in our list, add the Json line
+    for jsonItem in $dialogListJson; do
+        /bin/echo "$jsonItem" >> $dialogJsonFile
     done
+    # This trick removes the final character from the file, to ensure a valid Json
+    cat $dialogJsonFile | sed '$ s/.$//' > /var/tmp/tempJson
+    mv /var/tmp/tempJson $dialogJsonFile
+    # Finish Json file
     /bin/echo "]}" >> $dialogJsonFile
-    sleep .1
 
-    # Work-around permission issues for swiftDialog
-    # 'ERROR: File not found : /var/tmp/baselineJson.XXXX'
+    # Set global read permissions for Json file
     chmod 644 "$dialogJsonFile"
 }
 
@@ -868,6 +874,14 @@ function check_restart_option()
     else
         forceRestart="true"
     fi
+
+    logoutSetting=$($pBuddy -c "Print :LogOut" "$BaselineConfig")
+    if  [ $logoutSetting = "true" ]; then
+        forceLogOut="true"
+    else
+        forceLogOut="false"
+    fi
+
 }
 
 function check_progress_options()
@@ -893,17 +907,22 @@ function check_progress_options()
 
 function increment_progress_bar()
 {
+    # If we're not displaying the progress bar, skip
     if [ "$displayProgressBar" != "true" ]; then
         return
     fi
 
+    # Increment progress bar
     progressBarValue=$((progressBarValue+1))
+    # Do the math to determine total progress bar size for real increment
     progressBarPercentage=$((progressBarValue*100/progressBarTotal))
+    
     dialog_command "progress: $progressBarPercentage"
 }
 
 function set_progressbar_text()
 {
+    # If we're not displaying the progress bar, skip
     if [ "$displayProgressBarLabel" != "true" ]; then
         return
     fi
@@ -1080,11 +1099,14 @@ function configure_dialog_list_arguments()
     fi
 }
 
-# Adjust language of our list view window depending on whether or not the device will restart
+# Adjust language of our list view window depending on whether or not the device will restart/logout
 defaultListMessage="Feel free to step away, this could take 30 minutes or more."
-if $forceRestart; then
+if $forceLogOut; then
+    # Add a line break and a sentence about logging out
+    defaultListMessage+="\n\nYou will be logged out when it's ready for use."
+elif $forceRestart; then
     # Add a line break and a sentence about restarting.
-    defaultListMessage+="\n\nYour computer will restart when it's ready for use."
+    defaultListMessage+="\n\nYour computer will restart when it's ready for use." 
 fi
 
 configure_dialog_list_arguments "--title" "Your computer setup is underway"
@@ -1096,10 +1118,12 @@ configure_dialog_list_arguments "--quitkey" ']'
 
 if [ "$displayProgressBar" = "true" ]; then
     configure_dialog_list_arguments "--progress"
-    if [ "$displayProgressBarLabel" = "true" ]; then
-        configure_dialog_list_arguments "--progresstext" "Starting shortly..."
-    fi
 fi
+
+if [ "$displayProgressBarLabel" = "true" ]; then
+    configure_dialog_list_arguments "--progresstext" ' '
+fi
+
 
 #########################################
 #   Configure Success Customizations    #
@@ -1135,7 +1159,13 @@ function configure_dialog_success_arguments()
 configure_dialog_success_arguments "--title" "Your computer setup is complete"
 configure_dialog_success_arguments "--icon" "/System/Library/CoreServices/KeyboardSetupAssistant.app/Contents/Resources/AppIcon.icns"
 
-# Different values for --message and --button1text if we're forcing restart
+# Different values for --message and --button1text if we're forcing log out or restart
+if $forceLogOut; then
+    configure_dialog_success_arguments "--message" "You must log out before you can begin using your computer."
+    configure_dialog_success_arguments "--button1text" "Log Out Now"
+    configure_dialog_success_arguments "--timer" "120"
+fi
+
 if $forceRestart; then
     configure_dialog_success_arguments "--message" "Your device needs to restart before you can begin use."
     configure_dialog_success_arguments "--button1text" "Restart Now"
@@ -1143,6 +1173,7 @@ if $forceRestart; then
 else
     configure_dialog_success_arguments "--message" "Your device is ready for you."
 fi
+
 
 #########################################
 #   Configure Failure Customizations    #
@@ -1179,7 +1210,12 @@ configure_dialog_failure_arguments "--title" "Your computer setup is complete"
 configure_dialog_failure_arguments "--icon" "/System/Library/CoreServices/KeyboardSetupAssistant.app/Contents/Resources/AppIcon.icns"
 configure_dialog_failure_arguments "--message" "Your computer setup is complete, however not everything was installed as expected. Review the list below, and contact IT if you need assistance."
 
-# Different values for --message and --button1text if we're forcing restart
+# Different values for --message and --button1text if we're forcing log out or restart
+if $forceLogOut; then
+    configure_dialog_failure_arguments "--button1text" "Log Out Now"
+    configure_dialog_failure_arguments "--timer" "120"
+fi
+
 if $forceRestart; then
     configure_dialog_failure_arguments "--button1text" "Restart Now"
     configure_dialog_failure_arguments "--timer" "120"
