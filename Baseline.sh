@@ -1,6 +1,6 @@
 #!/bin/zsh
 set -x
-#dryRun=1
+#dryRun=true
 
 #   Written by Trevor Sysock of Second Son Consulting
 #   @BigMacAdmin on the MacAdmins Slack
@@ -34,6 +34,7 @@ BaselineScripts="$BaselineDir/Scripts"
 BaselinePackages="$BaselineDir/Packages"
 BaselineIcons="$BaselineDir/Icons"
 BaselineLaunchDaemon="/Library/LaunchDaemons/com.secondsonconsulting.baseline.plist"
+BaselineTempIconsDir="$(mktemp -d /var/tmp/baselineTmpIcons.XXXX)"
 ScriptOutputLog="/var/log/Baseline-ScriptsOutput.log"
 
 #Binaries
@@ -164,7 +165,8 @@ function cleanup_and_exit()
     dialog_command "quit:" 
     rm_if_exists "$dialogCommandFile"
     rm_if_exists "$dialogJsonFile"
-    if [ "$dryRun" != 1 ] && [ "$cleanupBaselineDirectory" = "true" ] ; then
+    rm_if_exists "$BaselineTempIconsDir"
+    if [ "$dryRun" != true ] && [ "$cleanupBaselineDirectory" = "true" ] ; then
         rm_if_exists "$BaselineDir"
     fi
     exit "$1"
@@ -200,30 +202,31 @@ function cleanup_and_restart()
     rm_if_exists "$dialogCommandFile"
     # Delete dialog json file
     rm_if_exists "$dialogJsonFile"
-  
-    # Determine exit configuration
-    # If ForceRestart is set to false
-    if [ $forceRestart = "false" ]; then
-        if  [ $cleanupBaselineDirectory = "true" ]; then
-            rm_if_exists "$BaselineDir"
-        fi
-        echo "Force Restart is set to false. Exiting"
-        exit "$1"
-    # If Force Log Out is set to true
-    elif [ $forceLogOut = "true" ]; then
-        echo "Force Log Out is set to true. Exiting"
-        osascript -e "tell application \"/System/Library/CoreServices/loginwindow.app\" to «event aevtrlgo»"
-        exit "$1"
-    # If the script is in DryRun mode
-    elif [ "$dryRun" = 1 ]; then
-        echo "this is where <shutdown -r now> would go"
-        exit "$1"
-    fi
+    # Delete icons tmp directory
+    rm_if_exists "$BaselineTempIconsDir"
 
     # Check if we are deleting the Baseline working directory and do it
     if  [ $cleanupBaselineDirectory = "true" ]; then
         rm_if_exists "$BaselineDir"
     fi
+
+  
+    # Determine exit configuration
+    # If ForceRestart is set to false
+    if [ $forceRestart = "false" ]; then
+        echo "Force Restart is set to false. Exiting"
+        exit "$1"
+    # If Force Log Out is set to true, force restart is false, and dry run is off
+    elif [ $forceLogOut = "true" ] && [ "$dryRun" != true ]; then
+        echo "Force Log Out is set to true. Exiting"
+        osascript -e "tell application \"/System/Library/CoreServices/loginwindow.app\" to «event aevtrlgo»"
+        exit "$1"
+    # If the script is in DryRun mode
+    elif [ "$dryRun" = true ]; then
+        echo "this is where <shutdown -r now> or logout would go"
+        exit "$1"
+    fi
+
     # Shutting down
     shutdown -r now
 }
@@ -474,14 +477,20 @@ function build_dialog_array()
 		#Get the icon path if populated in the configuration profile
         if $pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig" > /dev/null 2>&1; then
 			currentIconPath=$($pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig")
-			if [[ ${currentIconPath:0:4} == "http" ]]; then
+			# Check if Icon is remotely hosted URL
+            if [[ ${currentIconPath:0:4} == "http" ]]; then
                 report_message "Icon set to URL: $currentIconPath"
+            # Check if Icon is an SF Symbol
+			elif [[ ${currentIconPath:0:3} == 'SF=' ]]; then
+                report_message "Icon set to SF Symbol: $currentIconPath"
 			#Check of the given icon path exists on disk
 			elif [ -e "$currentIconPath" ]; then
 				report_message "Icon found: $currentIconPath"
 			elif [ -e "$BaselineIcons/$currentIconPath" ]; then
 				report_message "Icon found: $currentIconPath"
-                currentIconPath="$BaselineIcons/$currentIconPath"
+                cp "$BaselineIcons/$currentIconPath" "$BaselineTempIconsDir"/"$currentIconPath"
+                chmod 655 "$BaselineTempIconsDir"/"$currentIconPath"
+                currentIconPath="$BaselineTempIconsDir/$currentIconPath"
 			else
                 #If we can't find the local file, report and leave blank
                 report_message "ERROR: Icon key cannot be located: $currentIconPath"
@@ -840,6 +849,9 @@ function build_dialog_json_file()
 
     # Set global read permissions for Json file
     chmod 644 "$dialogJsonFile"
+
+    # Set global read permissions for Icon directory
+    chmod 655 "$BaselineTempIconsDir"
 }
 
 function build_dialog_list_options()
@@ -887,28 +899,28 @@ function check_restart_option()
 function check_progress_options()
 {
     # Set variable for whether or not we'll display a progress bar. Defaults to 'false'
-    displayProgressBarSetting=$($pBuddy -c "Print :DisplayProgressBar" "$BaselineConfig")
+    showProgressBarSetting=$($pBuddy -c "Print :ProgressBar" "$BaselineConfig")
 
-    if  [ $displayProgressBarSetting = "true" ]; then
-        displayProgressBar="true"
+    if  [ $showProgressBarSetting = "true" ]; then
+        showProgressBar="true"
     else
-        displayProgressBar="false"
+        showProgressBar="false"
     fi
 
     # Set variable for whether or not we'll display a progress bar label. Defaults to 'false'
-    displayProgressBarLabelSetting=$($pBuddy -c "Print :DisplayProgressBarLabel" "$BaselineConfig")
+    showProgressBarDisplayNameSetting=$($pBuddy -c "Print :ProgressBarDisplayNames" "$BaselineConfig")
 
-    if  [ $displayProgressBarLabelSetting = "true" ]; then
-        displayProgressBarLabel="true"
+    if  [ $showProgressBarDisplayNameSetting = "true" ]; then
+        progressBarDisplayNames="true"
     else
-        displayProgressBarLabel="false"
+        progressBarDisplayNames="false"
     fi
 }
 
 function increment_progress_bar()
 {
     # If we're not displaying the progress bar, skip
-    if [ "$displayProgressBar" != "true" ]; then
+    if [ "$showProgressBar" != "true" ]; then
         return
     fi
 
@@ -923,7 +935,7 @@ function increment_progress_bar()
 function set_progressbar_text()
 {
     # If we're not displaying the progress bar, skip
-    if [ "$displayProgressBarLabel" != "true" ]; then
+    if [ "$progressBarDisplayNames" != "true" ]; then
         return
     fi
 
@@ -939,7 +951,7 @@ defaultInstallomatorOptions=(
     NOTIFY=silent
 )
 
-if [ "$dryRun" = 1 ]; then
+if [ "$dryRun" = true ]; then
     defaultInstallomatorOptions+="DEBUG=2"
 fi
 
@@ -1036,8 +1048,8 @@ progressBarValue=0
 progressBarTotal=0
 
 # Initiate bools
-displayProgressBar="false"
-displayProgressBarLabel="false"
+showProgressBar="false"
+progressBarDisplayNames="false"
 
 ##############################
 #   Process Initial Scripts  #
@@ -1116,11 +1128,11 @@ configure_dialog_list_arguments "--width" 900
 configure_dialog_list_arguments "--height" 550
 configure_dialog_list_arguments "--quitkey" ']'
 
-if [ "$displayProgressBar" = "true" ]; then
+if [ "$showProgressBar" = "true" ]; then
     configure_dialog_list_arguments "--progress"
 fi
 
-if [ "$displayProgressBarLabel" = "true" ]; then
+if [ "$progressBarDisplayNames" = "true" ]; then
     configure_dialog_list_arguments "--progresstext" ' '
 fi
 
@@ -1257,7 +1269,7 @@ done
 #########################
 
 # Progress Bar will be pulsing until a value is set
-if [ "$displayProgressBar" = "true" ]; then
+if [ "$showProgressBar" = "true" ]; then
     dialog_command "progress: 1"
 fi
 
@@ -1276,7 +1288,7 @@ if [ -e "/Library/Application Support/Dialog/Dialog.png" ]; then
     dialog_command "listitem: Finishing up: success"
 fi
 
-if [ "$dryRun" = 1 ]; then
+if [ "$dryRun" = true ]; then
     sleep 5
 fi
 

@@ -207,16 +207,6 @@ A profile can consist of payloads with different version numbers. For example, c
 						</dict>
 						<dict>
 							<key>pfm_description</key>
-							<string>The icon you want to appear in the SwiftDialog menu as this Installomator label is processed. Can be a URL or local file path.</string>
-							<key>pfm_name</key>
-							<string>Icon</string>
-							<key>pfm_title</key>
-							<string>Icon</string>
-							<key>pfm_type</key>
-							<string>string</string>
-						</dict>
-						<dict>
-							<key>pfm_description</key>
 							<string>The Installomator label.</string>
 							<key>pfm_name</key>
 							<string>Label</string>
@@ -232,6 +222,16 @@ A profile can consist of payloads with different version numbers. For example, c
 							<string>Arguments</string>
 							<key>pfm_title</key>
 							<string>Arguments</string>
+							<key>pfm_type</key>
+							<string>string</string>
+						</dict>
+						<dict>
+							<key>pfm_description</key>
+							<string>The icon you want to appear in the SwiftDialog menu as this Installomator label is processed. Can be a URL or local file path.</string>
+							<key>pfm_name</key>
+							<string>Icon</string>
+							<key>pfm_title</key>
+							<string>Icon</string>
 							<key>pfm_type</key>
 							<string>string</string>
 						</dict>
@@ -262,16 +262,6 @@ A profile can consist of payloads with different version numbers. For example, c
 							<string>DisplayName</string>
 							<key>pfm_title</key>
 							<string>Display Name</string>
-							<key>pfm_type</key>
-							<string>string</string>
-						</dict>
-						<dict>
-							<key>pfm_description</key>
-							<string>The icon you want to appear in the SwiftDialog menu as this package is installed. Can be a URL or local file path.</string>
-							<key>pfm_name</key>
-							<string>Icon</string>
-							<key>pfm_title</key>
-							<string>Icon</string>
 							<key>pfm_type</key>
 							<string>string</string>
 						</dict>
@@ -315,6 +305,16 @@ A profile can consist of payloads with different version numbers. For example, c
 							<key>pfm_type</key>
 							<string>string</string>
 						</dict>
+						<dict>
+							<key>pfm_description</key>
+							<string>The icon you want to appear in the SwiftDialog menu as this package is installed. Can be a URL or local file path.</string>
+							<key>pfm_name</key>
+							<string>Icon</string>
+							<key>pfm_title</key>
+							<string>Icon</string>
+							<key>pfm_type</key>
+							<string>string</string>
+						</dict>
 					</array>
 					<key>pfm_type</key>
 					<string>dictionary</string>
@@ -342,16 +342,6 @@ A profile can consist of payloads with different version numbers. For example, c
 							<string>DisplayName</string>
 							<key>pfm_title</key>
 							<string>Display Name</string>
-							<key>pfm_type</key>
-							<string>string</string>
-						</dict>
-						<dict>
-							<key>pfm_description</key>
-							<string>The icon you want to appear in the SwiftDialog menu as this script is run. Can be a URL or local file path.</string>
-							<key>pfm_name</key>
-							<string>Icon</string>
-							<key>pfm_title</key>
-							<string>Icon</string>
 							<key>pfm_type</key>
 							<string>string</string>
 						</dict>
@@ -385,6 +375,16 @@ A profile can consist of payloads with different version numbers. For example, c
 							<key>pfm_type</key>
 							<string>string</string>
 						</dict>
+						<dict>
+							<key>pfm_description</key>
+							<string>The icon you want to appear in the SwiftDialog menu as this script is run. Can be a URL or local file path.</string>
+							<key>pfm_name</key>
+							<string>Icon</string>
+							<key>pfm_title</key>
+							<string>Icon</string>
+							<key>pfm_type</key>
+							<string>string</string>
+						</dict>
 					</array>
 					<key>pfm_type</key>
 					<string>dictionary</string>
@@ -401,7 +401,17 @@ A profile can consist of payloads with different version numbers. For example, c
 			<key>pfm_name</key>
 			<string>Restart</string>
 			<key>pfm_title</key>
-			<string>Restart</string>
+			<string>Force Restart</string>
+			<key>pfm_type</key>
+			<string>boolean</string>
+		</dict>
+		<dict>
+			<key>pfm_description</key>
+			<string>This setting controls whether Baseline forces a restart after completion. Default is true.</string>
+			<key>pfm_name</key>
+			<string>LogOut</string>
+			<key>pfm_title</key>
+			<string>Force Log Out</string>
 			<key>pfm_type</key>
 			<string>boolean</string>
 		</dict>
@@ -409,9 +419,9 @@ A profile can consist of payloads with different version numbers. For example, c
 			<key>pfm_description</key>
 			<string>This setting controls whether Baseline displays a progress bar. Default is false.</string>
 			<key>pfm_name</key>
-			<string>DisplayProgressBar</string>
+			<string>ProgressBar</string>
 			<key>pfm_title</key>
-			<string>DisplayProgressBar</string>
+			<string>Show Progress Bar</string>
 			<key>pfm_type</key>
 			<string>boolean</string>
 		</dict>
@@ -419,9 +429,19 @@ A profile can consist of payloads with different version numbers. For example, c
 			<key>pfm_description</key>
 			<string>This setting controls whether Baseline displays the current item being processed under the progress bar. Default is false.</string>
 			<key>pfm_name</key>
-			<string>DisplayProgressBarLabel</string>
+			<string>ProgressBarDisplayNames</string>
 			<key>pfm_title</key>
-			<string>DisplayProgressBarLabel</string>
+			<string>Show Display Names on Progress Bar</string>
+			<key>pfm_type</key>
+			<string>boolean</string>
+		</dict>
+		<dict>
+			<key>pfm_description</key>
+			<string>This setting controls whether Baseline deletes it's install directory after use: /usr/local/Baseline.</string>
+			<key>pfm_name</key>
+			<string>CleanupAfterUse</string>
+			<key>pfm_title</key>
+			<string>Cleanup After Use</string>
 			<key>pfm_type</key>
 			<string>boolean</string>
 		</dict>
