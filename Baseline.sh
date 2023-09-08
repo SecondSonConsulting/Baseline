@@ -46,6 +46,7 @@ installomatorPath="/usr/local/Installomator/Installomator.sh"
 #Other stuff
 dialogCommandFile=$(mktemp /var/tmp/baselineDialog.XXXXXX)
 dialogJsonFile=$(mktemp /var/tmp/baselineJson.XXXX)
+dialogFailedJsonFile=$(mktemp /var/tmp/baselineFailedJson.XXXX)
 expectedDialogTeamID="PWA5E9TQ59"
 
 ########################################################################################################
@@ -202,6 +203,8 @@ function cleanup_and_restart()
     rm_if_exists "$dialogCommandFile"
     # Delete dialog json file
     rm_if_exists "$dialogJsonFile"
+    # Delete dialog failed json file
+    rm_if_exists "$dialogFailedJsonFile"
     # Delete icons tmp directory
     rm_if_exists "$BaselineTempIconsDir"
 
@@ -210,7 +213,6 @@ function cleanup_and_restart()
         rm_if_exists "$BaselineDir"
     fi
 
-  
     # Determine exit configuration
     # If ForceRestart is set to false
     if [ $forceRestart = "false" ]; then
@@ -435,6 +437,10 @@ function process_installomator_labels()
         fi
         #Get the display name of the label we're installing. We need this to update the dialog list
         currentDisplayName=$($pBuddy -c "Print :Installomator:${currentIndex}:DisplayName" "$BaselineConfig")
+        #Set the current icon
+        if $pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig" > /dev/null 2>&1; then
+            currentIconPath=$($pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig")
+        fi
         #Update the dialog window so that this item shows as "pending"
         dialog_command "listitem: title: $currentDisplayName, status: wait"
         set_progressbar_text "$currentDisplayName"
@@ -444,7 +450,8 @@ function process_installomator_labels()
         if [ $installomatorExitCode != 0 ]; then
             report_message "Installomator failed to install: $currentLabel - Exit Code: $installomatorExitCode"
             dialog_command "listitem: title: $currentDisplayName, status: fail"
-            failList+=("$currentDisplayName")
+            #failList+=("$currentDisplayName")
+            failListJson+="{\"title\" : \"$currentDisplayName\", \"icon\" : \"$currentIconPath\", \"status\" : \"\"},"
         else
             report_message "Installomator successfully installed: $currentLabel"
             dialog_command "listitem: title: $currentDisplayName, status: success"
@@ -533,6 +540,10 @@ function process_scripts()
         unset scriptDownloadExitCode
         #Get the display name of the label we're installing. We need this to update the dialog list
         currentDisplayName=$($pBuddy -c "Print :${1}:${currentIndex}:DisplayName" "$BaselineConfig")
+        #Set the current icon
+        if $pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig" > /dev/null 2>&1; then
+            currentIconPath=$($pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig")
+        fi
         #Set the current script name
         currentScriptPath=$($pBuddy -c "Print :${1}:${currentIndex}:ScriptPath" "$BaselineConfig")
         #Check if the defined script is a remote path
@@ -569,7 +580,8 @@ function process_scripts()
             increment_progress_bar
             # Report the fail
             dialog_command "listitem: title: $currentDisplayName, status: fail"
-            failList+=("$currentDisplayName")
+            #failList+=("$currentDisplayName")
+            failListJson+="{\"title\" : \"$currentDisplayName\", \"icon\" : \"$currentIconPath\", \"status\" : \"\"},"
             # Bail this pass through the while loop and continue processing next item
             continue
         fi
@@ -591,7 +603,8 @@ function process_scripts()
                 fi
                 # Report the fail
                 dialog_command "listitem: title: $currentDisplayName, status: fail"
-                failList+=("$currentDisplayName")
+                #failList+=("$currentDisplayName")
+                failListJson+="{\"title\" : \"$currentDisplayName\", \"icon\" : \"$currentIconPath\", \"status\" : \"\"},"
                 # Bail this pass through the while loop and continue processing next item
                 continue
             fi
@@ -626,7 +639,8 @@ function process_scripts()
         if [ $scriptExitCode != 0 ]; then
             report_message "Script failed to complete: $currentScript - Exit Code: $scriptExitCode"
             dialog_command "listitem: title: $currentDisplayName, status: fail"
-            failList+=("$currentDisplayName")
+            #failList+=("$currentDisplayName")
+            failListJson+="{\"title\" : \"$currentDisplayName\", \"icon\" : \"$currentIconPath\", \"status\" : \"\"},"
         else
             report_message "Script completed successfully: $currentScript"
             dialog_command "listitem: title: $currentDisplayName, status: success"
@@ -681,6 +695,10 @@ function process_pkgs()
 
         #Get the display name of the label we're installing. We need this to update the dialog list
         currentDisplayName=$($pBuddy -c "Print :Packages:${currentIndex}:DisplayName" "$BaselineConfig")
+        #Set the current icon
+        if $pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig" > /dev/null 2>&1; then
+            currentIconPath=$($pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig")
+        fi
         #Set the current package path
         currentPKGPath=$($pBuddy -c "Print :Packages:${currentIndex}:PackagePath" "$BaselineConfig")
         
@@ -729,7 +747,8 @@ function process_pkgs()
         else
             report_message "Package not found $currentPKGPath"
             dialog_command "listitem: title: $currentDisplayName, status: fail"
-            failList+=("$currentDisplayName")
+            #failList+=("$currentDisplayName")
+            failListJson+="{\"title\" : \"$currentDisplayName\", \"icon\" : \"$currentIconPath\", \"status\" : \"\"},"
             currentIndex=$((currentIndex+1))
             increment_progress_bar
             continue
@@ -778,7 +797,8 @@ function process_pkgs()
             if [ "$expectedTeamID" != "$actualTeamID" ]; then
                 report_message "TeamID validation of PKG failed: $currentPKG - Expected: $expectedTeamID Actual: $actualTeamID"
                 dialog_command "listitem: title: $currentDisplayName, status: fail"
-                failList+=("$currentDisplayName")
+                #failList+=("$currentDisplayName")
+                failListJson+="{\"title\" : \"$currentDisplayName\", \"icon\" : \"$currentIconPath\", \"status\" : \"\"},"
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 increment_progress_bar
@@ -799,7 +819,8 @@ function process_pkgs()
             if [ "$expectedMD5" != "$actualMD5" ]; then
                 report_message "MD5 validation of PKG failed: $currentPKG - Expected: $expectedMD5 Actual: $actualMD5"
                 dialog_command "listitem: title: $currentDisplayName, status: fail"
-                failList+=("$currentDisplayName")
+                #failList+=("$currentDisplayName")
+                failListJson+="{\"title\" : \"$currentDisplayName\", \"icon\" : \"$currentIconPath\", \"status\" : \"\"},"
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 increment_progress_bar
@@ -820,7 +841,8 @@ function process_pkgs()
         if [ $pkgExitCode != 0 ]; then
             report_message "Package failed to complete: $currentPKG - Exit Code: $pkgExitCode"
             dialog_command "listitem: title: $currentDisplayName, status: fail"
-            failList+=("$currentDisplayName")
+            #failList+=("$currentDisplayName")
+            failListJson+="{\"title\" : \"$currentDisplayName\", \"icon\" : \"$currentIconPath\", \"status\" : \"\"},"
         else
             report_message "Package completed successfully: $currentPKG"
             dialog_command "listitem: title: $currentDisplayName, status: success"
@@ -835,20 +857,22 @@ function process_pkgs()
 
 function build_dialog_json_file()
 {
+    jsonFile="$1"
+    jsonList="$2"
     # Initiate Json file
-    /bin/echo "{\"listitem\" : [" >> $dialogJsonFile
+    /bin/echo "{\"listitem\" : [" >> $jsonFile
     # For each item in our list, add the Json line
-    for jsonItem in $dialogListJson; do
-        /bin/echo "$jsonItem" >> $dialogJsonFile
+    for jsonItem in $jsonList; do
+        /bin/echo "$jsonItem" >> $jsonFile
     done
     # This trick removes the final character from the file, to ensure a valid Json
-    cat $dialogJsonFile | sed '$ s/.$//' > /var/tmp/tempJson
-    mv /var/tmp/tempJson $dialogJsonFile
+    cat $jsonFile | sed '$ s/.$//' > /var/tmp/tempJson
+    mv /var/tmp/tempJson $jsonFile
     # Finish Json file
-    /bin/echo "]}" >> $dialogJsonFile
+    /bin/echo "]}" >> $jsonFile
 
     # Set global read permissions for Json file
-    chmod 644 "$dialogJsonFile"
+    chmod 644 "$jsonFile"
 
     # Set global read permissions for Icon directory
     chmod 655 "$BaselineTempIconsDir"
@@ -1028,6 +1052,7 @@ dialogList=()
 dialogListItems=()
 dialogListJson=()
 failList=()
+failListJson=()
 successList=()
 
 installomatorLabels=()
@@ -1242,7 +1267,7 @@ fi
 build_dialog_array Installomator
 build_dialog_array Packages
 build_dialog_array Scripts
-build_dialog_json_file
+build_dialog_json_file "$dialogJsonFile" "$dialogListJson"
 build_dialog_list_options
 
 
@@ -1297,7 +1322,7 @@ dialog_command "quit:"
 
 #Do final script swiftDialog stuff
 #If the failList is empty, this means success
-if [ -z "$failList" ]; then
+if [ -z "$failListJson" ]; then
     #Create our Success Dialog Window. We use a "while" loop and a nested if/then in order to bail if there's a configuration file problem.
     #Set a timer for our attempts
     dialogAttemptCount=1
@@ -1326,10 +1351,11 @@ if [ -z "$failList" ]; then
     cleanup_and_restart
 else
     #There was at least one failed item. Build fail list
-    failListItems=()
-    for i in ${failList[@]}; do
-        failListItems+=(--listitem $i)
-    done
+    # failListItems=()
+    # for i in ${failList[@]}; do
+    #     failListItems+=(--listitem $i)
+    # done
+    build_dialog_json_file "$dialogFailedJsonFile" "$failListJson"
     #Create our Failure Dialog Window. We use a "while" loop and a nested if/then in order to bail if there's a configuration file problem.
     #Set a timer for our attempts
     dialogAttemptCount=1
@@ -1340,7 +1366,7 @@ else
         #If we haven't tried 10 times yet, then try to call Dialog
         if [ "$dialogAttemptCount" -le 10 ]; then
             #If dialog exits 0, then exit our loop
-            ${finalFailureCommand[@]} ${failListItems[@]}
+            ${finalFailureCommand[@]} --jsonfile "$dialogFailedJsonFile" #${failListItems[@]}
             dialogExitCode=$?
             if [ $dialogExitCode = 0 ] || [ $dialogExitCode = 4 ]; then
                 dialogCompletionWindow="complete"
