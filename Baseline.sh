@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="v.1.3beta1"
+scriptVersion="v.2.0beta1"
 
 ########################################################################################################
 ########################################################################################################
@@ -27,6 +27,7 @@ fi
 #Baseline files/folders
 BaselineConfig="/Library/Managed Preferences/com.secondsonconsulting.baseline.plist"
 BaselineDir="/usr/local/Baseline"
+BaselineTempDir="$(mktemp -d /var/tmp/baselineTempDir.XXXXXXX)"
 customConfigPlist="$BaselineDir/BaselineConfig.plist"
 logFile="/var/log/Baseline.log"
 BaselinePath="$BaselineDir/Baseline.sh"
@@ -34,7 +35,7 @@ BaselineScripts="$BaselineDir/Scripts"
 BaselinePackages="$BaselineDir/Packages"
 BaselineIcons="$BaselineDir/Icons"
 BaselineLaunchDaemon="/Library/LaunchDaemons/com.secondsonconsulting.baseline.plist"
-BaselineTempIconsDir="$(mktemp -d /var/tmp/baselineTmpIcons.XXXX)"
+BaselineTempIconsDir=$(mktemp -d "${BaselineTempDir}/baselineTmpIcons.XXXX")
 ScriptOutputLog="/var/log/Baseline-ScriptsOutput.log"
 
 #Binaries
@@ -44,9 +45,11 @@ dialogAppPath="/Library/Application Support/Dialog/Dialog.app"
 installomatorPath="/usr/local/Installomator/Installomator.sh"
 
 #Other stuff
-dialogCommandFile=$(mktemp /var/tmp/baselineDialog.XXXXXX)
-dialogJsonFile=$(mktemp /var/tmp/baselineJson.XXXX)
+dialogCommandFile=$(mktemp "${BaselineTempDir}/baselineDialog.XXXXXX")
+dialogJsonFile=$(mktemp "${BaselineTempDir}/baselineJson.XXXX")
 expectedDialogTeamID="PWA5E9TQ59"
+
+chmod -R 655 "${BaselineTempDir}"
 
 ########################################################################################################
 ########################################################################################################
@@ -145,7 +148,7 @@ function cleanup_and_exit()
     # Check if we are leaving the Baseline working directory or deleting
     cleanupAfterUse=$($pBuddy -c "Print :CleanupAfterUse" "$BaselineConfig")
 
-    if  [ $cleanupAfterUse = "false" ]; then
+    if  [[ $cleanupAfterUse == "false" ]]; then
         cleanupBaselineDirectory="false"
     else
         cleanupBaselineDirectory="true"
@@ -163,9 +166,7 @@ function cleanup_and_exit()
 
     kill "$caffeinatepid"
     dialog_command "quit:" 
-    rm_if_exists "$dialogCommandFile"
-    rm_if_exists "$dialogJsonFile"
-    rm_if_exists "$BaselineTempIconsDir"
+    rm_if_exists "${BaselineTempDir}"
     if [ "$dryRun" != true ] && [ "$cleanupBaselineDirectory" = "true" ] ; then
         rm_if_exists "$BaselineDir"
     fi
@@ -198,36 +199,38 @@ function cleanup_and_restart()
     kill "$caffeinatepid"
     # Close dialog window
     dialog_command "quit:"
-    # Delete dialog command file 
-    rm_if_exists "$dialogCommandFile"
-    # Delete dialog json file
-    rm_if_exists "$dialogJsonFile"
-    # Delete icons tmp directory
-    rm_if_exists "$BaselineTempIconsDir"
+
+    # Delete Baseline Temp Dir 
+    rm_if_exists "${BaselineTempDir}"
 
     # Check if we are deleting the Baseline working directory and do it
     if  [ $cleanupBaselineDirectory = "true" ]; then
         rm_if_exists "$BaselineDir"
     fi
 
-  
     # Determine exit configuration
-    # If ForceRestart is set to false
-    if [ $forceRestart = "false" ]; then
-        echo "Force Restart is set to false. Exiting"
-        exit "$1"
-    # If Force Log Out is set to true, force restart is false, and dry run is off
-    elif [ $forceLogOut = "true" ] && [ "$dryRun" != true ]; then
+    # If ForceRestart is set to false,  and dry run is off
+    if [ $forceRestart = "true" ] && [ "$dryRun" != "true" ]; then
+        echo "Force Restart is configured. Restarting"
+        shutdown -r now
+    # If Force Log Out is set to true, and dry run is off
+    elif [ $forceLogOut = "true" ] && [ "$dryRun" != "true" ]; then
         echo "Force Log Out is set to true. Exiting"
         osascript -e "tell application \"/System/Library/CoreServices/loginwindow.app\" to «event aevtrlgo»"
         exit "$1"
     # If the script is in DryRun mode
+    elif [ $forceLogOut = "false" ] && [ $forceRestart = "false" ] && [ "$dryRun" != "true" ]; then
+        echo "Force Log Out and Force Restart are false. Exiting with no action."
+        exit "$1"
     elif [ "$dryRun" = true ]; then
-        echo "this is where <shutdown -r now> or logout would go"
+        echo "Dry Run Enabled, no exit action taken."
+        echo "ForceRestart is set to: $forceRestart"
+        echo "ForceLogOut is set to: $forceLogOut"
         exit "$1"
     fi
 
     # Shutting down
+    log_message "Unknown ExitAction determined. Falling back on default to ForceRestart"
     shutdown -r now
 }
 
@@ -365,7 +368,7 @@ function wait_for_user()
 #Check for custom config. We prioritize this even over a mobileconfig file.
 function check_for_custom_plist()
 {
-    if [ -e $customConfigPlist ]; then
+    if [ -e $customConfigPlist ] && ! $configFromArgument; then
         BaselineConfig="$customConfigPlist"
     fi
 }
@@ -486,11 +489,10 @@ function build_dialog_array()
 			#Check of the given icon path exists on disk
 			elif [ -e "$currentIconPath" ]; then
 				report_message "Icon found: $currentIconPath"
-			elif [ -e "$BaselineIcons/$currentIconPath" ]; then
+			elif [ -e "$BaselineTempIconsDir/$currentIconPath" ]; then
 				report_message "Icon found: $currentIconPath"
-                cp "$BaselineIcons/$currentIconPath" "$BaselineTempIconsDir"/"$currentIconPath"
-                chmod 655 "$BaselineTempIconsDir"/"$currentIconPath"
                 currentIconPath="$BaselineTempIconsDir/$currentIconPath"
+                chmod 655 "${currentIconPath}"
 			else
                 #If we can't find the local file, report and leave blank
                 report_message "ERROR: Icon key cannot be located: $currentIconPath"
@@ -833,6 +835,13 @@ function process_pkgs()
     done
 }
 
+function copy_icons_dir(){
+    if [ -d "${BaselineIcons}" ]; then
+        cp -r "${BaselineIcons}/"* "${BaselineTempIconsDir}/"
+        chmod -R 655 "${BaselineTempIconsDir}"
+    fi
+}
+
 function build_dialog_json_file()
 {
     # Initiate Json file
@@ -842,16 +851,14 @@ function build_dialog_json_file()
         /bin/echo "$jsonItem" >> $dialogJsonFile
     done
     # This trick removes the final character from the file, to ensure a valid Json
-    cat $dialogJsonFile | sed '$ s/.$//' > /var/tmp/tempJson
-    mv /var/tmp/tempJson $dialogJsonFile
+    cat "$dialogJsonFile" | sed '$ s/.$//' > "${BaselineTempDir}/tempJson1"
+    mv "${BaselineTempDir}/tempJson1" "$dialogJsonFile"
     # Finish Json file
-    /bin/echo "]}" >> $dialogJsonFile
+    /bin/echo "]}" >> "$dialogJsonFile"
 
     # Set global read permissions for Json file
     chmod 644 "$dialogJsonFile"
 
-    # Set global read permissions for Icon directory
-    chmod 655 "$BaselineTempIconsDir"
 }
 
 function build_dialog_list_options()
@@ -879,18 +886,30 @@ function check_exit_condition()
 function check_restart_option()
 {
     # Set variable for whether or not we'll force a restart. Defaults to 'true'
-    forceRestartSetting=$($pBuddy -c "Print :Restart" "$BaselineConfig")
+    forceRestartSetting=$($pBuddy -c "Print :Restart" "$BaselineConfig" 2> /dev/null )
 
-    if  [ $forceRestartSetting = "false" ]; then
+    if  [[ "$forceRestartSetting" == "false" ]]; then
         forceRestart="false"
-    else
+    elif  [[ "$forceRestartSetting" == "true" ]]; then
         forceRestart="true"
     fi
 
-    logoutSetting=$($pBuddy -c "Print :LogOut" "$BaselineConfig")
-    if  [ $logoutSetting = "true" ]; then
+    logoutSetting=$($pBuddy -c "Print :LogOut" "$BaselineConfig" 2> /dev/null )
+    if  [[ "$logoutSetting" == "true" ]]; then
         forceLogOut="true"
-    else
+    elif  [[ "$logoutSetting" == "false" ]]; then
+        forceLogOut="false"
+    fi
+
+    debug_message "Checking exit action variables"
+    # If neither ForceRestart or ForceLogout were configured, then set default to force Restart.
+    if [ -z $forceRestart ] && [ -z $forceLogOut ]; then
+        forceRestart="true"
+        forceLogOut="false"
+    fi
+
+    # If ForceRestart was set to true, set forceLogOut to false so that restart takes precedence
+    if [[ "$forceRestart" == "true" ]]; then
         forceLogOut="false"
     fi
 
@@ -899,18 +918,18 @@ function check_restart_option()
 function check_progress_options()
 {
     # Set variable for whether or not we'll display a progress bar. Defaults to 'false'
-    showProgressBarSetting=$($pBuddy -c "Print :ProgressBar" "$BaselineConfig")
+    showProgressBarSetting=$($pBuddy -c "Print :ProgressBar" "$BaselineConfig" 2> /dev/null )
 
-    if  [ $showProgressBarSetting = "true" ]; then
+    if  [[ $showProgressBarSetting == "true" ]]; then
         showProgressBar="true"
     else
         showProgressBar="false"
     fi
 
     # Set variable for whether or not we'll display a progress bar label. Defaults to 'false'
-    showProgressBarDisplayNameSetting=$($pBuddy -c "Print :ProgressBarDisplayNames" "$BaselineConfig")
+    showProgressBarDisplayNameSetting=$($pBuddy -c "Print :ProgressBarDisplayNames" "$BaselineConfig" 2> /dev/null )
 
-    if  [ $showProgressBarDisplayNameSetting = "true" ]; then
+    if  [[ $showProgressBarDisplayNameSetting == "true" ]]; then
         progressBarDisplayNames="true"
     else
         progressBarDisplayNames="false"
@@ -962,6 +981,7 @@ fi
 ##
 ########################################################################################################
 ########################################################################################################
+
 debug_message "Starting script actions"
 
 #Verify we're running as root
@@ -986,6 +1006,35 @@ initiate_logging
 
 #Setup report
 initiate_report
+
+#################################
+#   Process Script Arguments    #
+#################################
+
+while [ ! -z "$1" ]; do
+    case $1 in; 
+        -c|--config|--configuration)
+            shift
+            if [ -e "$1" ] && $pBuddy -c "Print" "${1}" > /dev/null 2>&1; then
+                echo "Using configuration profile from argument: $1"
+                BaselineConfig="$1"
+                function verify_configuration_file(){
+                    true
+                }
+                configFromArgument=true
+            elif [ ! -e "$1" ]; then
+                cleanup_and_exit 80 "ERROR: Configuration not found: $1"
+            else
+                cleanup_and_exit 81 "ERROR: Invalid configuration file: $1"
+            fi
+            ;;
+        *)
+            echo "unknown argument: $1"
+            cleanup_and_exit 82
+            ;;
+    esac
+    shift
+done
 
 #############################################
 #   Verify a Configuration File is in Place #
@@ -1074,17 +1123,48 @@ check_restart_option
 # Check if we should display a progress bar under the UI
 check_progress_options
 
+# Check if there is an Icons directory, and if so make a temporary copy of it
+copy_icons_dir
+
+#####################################
+#   Initiate Dialog Option Arays    #
+#####################################
+
+finalListCommand=()
+finalSuccessCommand=()
+finalFailureCommand=()
+
+finalListCommand+="$dialogPath"
+finalSuccessCommand+="$dialogPath"
+finalFailureCommand+="$dialogPath"
+
 
 ######################################
 #   Configure List Customizations    #
 ######################################
 
-finalListCommand=()
-finalListCommand+="$dialogPath"
-finalListCommand+="--blurscreen"
-finalListCommand+="--button1disabled"
 
-# Read the Dialog List Arguments customizations, if there are any
+# Configure Blur Screen options
+button1Enabled=$($pBuddy -c "Print :Button1Enabled" "$BaselineConfig" 2> /dev/null)
+
+if  [[ $button1Enabled == "true" ]]; then
+    true
+else
+    finalListCommand+="--button1disabled"
+fi
+
+# Configure Blur Screen options
+blurScreen=$($pBuddy -c "Print :BlurScreen" "$BaselineConfig" 2> /dev/null)
+
+if  [[ $blurScreen == "false" ]]; then
+    true
+else
+    finalListCommand+="--blurscreen"
+    finalSuccessCommand+="--blurscreen"
+    finalFailureCommand+="--blurscreen"
+fi
+
+# Read the Dialog List `Arguments` customizations, if there are any
 if $pBuddy -c "Print DialogListOptions" "$BaselineConfig" > /dev/null 2>&1; then
     dialogListArguments=$($pBuddy -c "Print DialogListOptions" "$BaselineConfig")
 fi
@@ -1141,10 +1221,6 @@ fi
 #   Configure Success Customizations    #
 #########################################
 
-finalSuccessCommand=()
-finalSuccessCommand+="$dialogPath"
-finalSuccessCommand+="--blurscreen"
-
 # Read the Dialog Success Arguments customizations, if there are any
 if $pBuddy -c "Print DialogSuccessOptions" "$BaselineConfig" > /dev/null 2>&1; then
     dialogSuccessArguments=$($pBuddy -c "Print DialogSuccessOptions" "$BaselineConfig")
@@ -1170,7 +1246,7 @@ function configure_dialog_success_arguments()
 
 configure_dialog_success_arguments "--title" "Your computer setup is complete"
 configure_dialog_success_arguments "--icon" "/System/Library/CoreServices/KeyboardSetupAssistant.app/Contents/Resources/AppIcon.icns"
-
+configure_dialog_success_arguments "--quitkey" ']'
 # Different values for --message and --button1text if we're forcing log out or restart
 if $forceLogOut; then
     configure_dialog_success_arguments "--message" "You must log out before you can begin using your computer."
@@ -1190,10 +1266,6 @@ fi
 #########################################
 #   Configure Failure Customizations    #
 #########################################
-
-finalFailureCommand=()
-finalFailureCommand+="$dialogPath"
-finalFailureCommand+="--blurscreen"
 
 # Read the Dialog Failure Arguments customizations, if there are any
 if $pBuddy -c "Print DialogFailureOptions" "$BaselineConfig" > /dev/null 2>&1; then
@@ -1221,6 +1293,7 @@ function configure_dialog_failure_arguments()
 configure_dialog_failure_arguments "--title" "Your computer setup is complete"
 configure_dialog_failure_arguments "--icon" "/System/Library/CoreServices/KeyboardSetupAssistant.app/Contents/Resources/AppIcon.icns"
 configure_dialog_failure_arguments "--message" "Your computer setup is complete, however not everything was installed as expected. Review the list below, and contact IT if you need assistance."
+configure_dialog_failure_arguments "--quitkey" ']'
 
 # Different values for --message and --button1text if we're forcing log out or restart
 if $forceLogOut; then
@@ -1279,8 +1352,24 @@ process_pkgs
 
 process_scripts Scripts
 
-#Check if we have a custom Dialog.app icon waiting to process. If yes, reinstall dialog
-if [ -e "/Library/Application Support/Dialog/Dialog.png" ]; then
+#Check if we have a custom Dialog.app icon waiting to process. If yes, reinstall dialog (unless config says to skip it)
+forceDialogReinstallSetting=$($pBuddy -c "Print ReinstallDialog" "$BaselineConfig" 2> /dev/null)
+
+# If the configuration set ReinstallDialog to false
+if  [[ "$forceDialogReinstallSetting" == "false" ]]; then
+    forceDialogReinstall="false"
+# If the configuration set ReinstallDialog to true
+elif  [[ "$forceDialogReinstallSetting" == "true" ]]; then
+    forceDialogReinstall="true"
+# If the configuration did not incluse ReinstallDialog, but we found a custom icon
+elif  [ -e "/Library/Application Support/Dialog/Dialog.png" ]; then
+    forceDialogReinstall="true"
+else
+    forceDialogReinstall="false"
+fi
+
+# Check if there is a custom Dialog icon and/or if we are going to reinstall
+if $forceDialogReinstall; then
     dialog_command "listitem: add, title: Finishing up"
     dialog_command "listitem: Finishing up: wait"
     rm_if_exists "$dialogAppPath"
@@ -1310,7 +1399,7 @@ if [ -z "$failList" ]; then
             #If dialog exits 0, then exit our loop
             ${finalSuccessCommand[@]}
             dialogExitCode=$?
-            if [ $dialogExitCode = 0 ] || [ $dialogExitCode = 4 ]; then
+            if [ $dialogExitCode = 0 ] || [ $dialogExitCode = 4 ] || [ $dialogExitCode = 10 ]; then
                 dialogCompletionWindow="complete"
             fi
             #Increment our dialog attempt count
@@ -1342,7 +1431,7 @@ else
             #If dialog exits 0, then exit our loop
             ${finalFailureCommand[@]} ${failListItems[@]}
             dialogExitCode=$?
-            if [ $dialogExitCode = 0 ] || [ $dialogExitCode = 4 ]; then
+            if [ $dialogExitCode = 0 ] || [ $dialogExitCode = 4 ] || [ $dialogExitCode = 10 ]; then
                 dialogCompletionWindow="complete"
             fi
             #Increment our dialog attempt count
