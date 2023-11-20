@@ -68,8 +68,10 @@ function check_root()
 
 # check we are running as root
 if [[ $(id -u) -ne 0 ]]; then
-  echo "ERROR: This script must be run as root **EXITING**"
-  exit 1
+    echo "ERROR: This script must be run as root **EXITING**"
+    # Delete Baseline Temp Dir 
+    rm_if_exists "${BaselineTempDir}"
+    exit 1
 fi
 }
 
@@ -113,6 +115,8 @@ function initiate_logging()
 {
 if ! touch "$logFile" ; then
     debug_message "ERROR: Logging fail. Cannot create log file"
+    # Delete Baseline Temp Dir 
+    rm_if_exists "${BaselineTempDir}"
     exit 1
 else
     log_message "Baseline.sh initiated"
@@ -132,6 +136,8 @@ function initiate_report()
     reportFile="/usr/local/Baseline/Baseline-Report.txt"
     if ! touch "$reportFile" ; then
         debug_message "ERROR: Reporting fail. Cannot create report file"
+        # Delete Baseline Temp Dir 
+        rm_if_exists "${BaselineTempDir}"
         exit 1
     else
         rm_if_exists "$reportFile"
@@ -170,6 +176,8 @@ function cleanup_and_exit()
     if [ "$dryRun" != true ] && [ "$cleanupBaselineDirectory" = "true" ] ; then
         rm_if_exists "$BaselineDir"
     fi
+    # Delete Baseline Temp Dir 
+    rm_if_exists "${BaselineTempDir}"
     exit "$1"
 }
 
@@ -200,8 +208,6 @@ function cleanup_and_restart()
     # Close dialog window
     dialog_command "quit:"
 
-    # Delete Baseline Temp Dir 
-    rm_if_exists "${BaselineTempDir}"
 
     # Check if we are deleting the Baseline working directory and do it
     if  [ $cleanupBaselineDirectory = "true" ]; then
@@ -210,27 +216,37 @@ function cleanup_and_restart()
 
     # Determine exit configuration
     # If ForceRestart is set to false,  and dry run is off
-    if [ $forceRestart = "true" ] && [ "$dryRun" != "true" ]; then
-        echo "Force Restart is configured. Restarting"
+    if [[ $forceRestart == "true" ]] && [[ "$dryRun" != "true" ]]; then
+        report_message "Force Restart is configured. Restarting"
+        # Delete Baseline Temp Dir 
+        rm_if_exists "${BaselineTempDir}"
         shutdown -r now
     # If Force Log Out is set to true, and dry run is off
-    elif [ $forceLogOut = "true" ] && [ "$dryRun" != "true" ]; then
-        echo "Force Log Out is set to true. Exiting"
+    elif [[ $forceLogOut == "true" ]] && [[ "$dryRun" != "true" ]]; then
+        report_message "Force Log Out is set to true. Exiting"
         osascript -e "tell application \"/System/Library/CoreServices/loginwindow.app\" to «event aevtrlgo»"
+        # Delete Baseline Temp Dir 
+        rm_if_exists "${BaselineTempDir}"
         exit "$1"
     # If the script is in DryRun mode
-    elif [ $forceLogOut = "false" ] && [ $forceRestart = "false" ] && [ "$dryRun" != "true" ]; then
-        echo "Force Log Out and Force Restart are false. Exiting with no action."
+    elif [[ $forceLogOut == "false" ]] && [[ $forceRestart == "false" ]] && [[ "$dryRun" != "true" ]]; then
+        report_message "Force Log Out and Force Restart are false. Exiting with no action."
+        # Delete Baseline Temp Dir 
+        rm_if_exists "${BaselineTempDir}"
         exit "$1"
-    elif [ "$dryRun" = true ]; then
-        echo "Dry Run Enabled, no exit action taken."
-        echo "ForceRestart is set to: $forceRestart"
-        echo "ForceLogOut is set to: $forceLogOut"
+    elif [[ "$dryRun" = true ]]; then
+        report_message "Dry Run Enabled, no exit action taken."
+        report_message "ForceRestart is set to: $forceRestart"
+        report_message "ForceLogOut is set to: $forceLogOut"
+        # Delete Baseline Temp Dir 
+        rm_if_exists "${BaselineTempDir}"
         exit "$1"
     fi
 
     # Shutting down
     log_message "Unknown ExitAction determined. Falling back on default to ForceRestart"
+    # Delete Baseline Temp Dir 
+    rm_if_exists "${BaselineTempDir}"
     shutdown -r now
 }
 
@@ -398,6 +414,13 @@ function verify_configuration_file()
         fi
     done
     debug_message "Configuration file found successfully: $BaselineConfig "
+
+    # If we're working off an MDM configuration profile, copy it to our temp location and go off the copy.
+    # Have seen edge cases where an MDM removes or re-applies profiles, this will prevent that from causing issues.
+    if [[ "$BaselineConfig" == "/Library/Managed Preferences/com.secondsonconsulting.baseline.plist" ]]; then
+        cp "$BaselineConfig" "$BaselineTempDir/BaselineConfig.plist"
+        BaselineConfig="$BaselineTempDir/BaselineConfig.plist"
+    fi
 }
 
 function build_installomator_array()
@@ -423,6 +446,7 @@ function process_installomator_labels()
     #Loop through and test if there is a value in the slot of this index for the given array
     #If this command fails it means we've reached the end of the array in the config file (or there are none) and we exit our loop
     while $pBuddy -c "Print :Installomator:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
+        check_for_bail_out
         if [ ! -e "$installomatorPath" ]; then
             cleanup_and_exit 1 "ERROR: Installomator failed to install after numerous attempts. Exiting."
         fi
@@ -436,13 +460,21 @@ function process_installomator_labels()
             #This label does not have options defined
             currentArguments=""
         fi
+        #Now we have to do a trick in case there are multiple arguments, some of which are quoted together
+        #Consider: /path/to/script.sh --font "Times New Roman"
+        #Used the eval trick outlined here: https://superuser.com/questions/1066455/how-to-split-a-string-with-quotes-like-command-arguments-in-bash
+        currentArgumentArray=()
+        if [ -n "$currentArguments" ]; then
+            eval 'for argument in '$currentArguments'; do currentArgumentArray+=$argument; done'
+        fi
+
         #Get the display name of the label we're installing. We need this to update the dialog list
         currentDisplayName=$($pBuddy -c "Print :Installomator:${currentIndex}:DisplayName" "$BaselineConfig")
         #Update the dialog window so that this item shows as "pending"
         dialog_command "listitem: title: $currentDisplayName, status: wait"
         set_progressbar_text "$currentDisplayName"
         #Call installomator with our desired options. Default options first, so that they can be overriden by "currentArguments"
-        $installomatorPath $currentLabel ${defaultInstallomatorOptions[@]} $currentArguments > /dev/null 2>&1
+        $installomatorPath $currentLabel ${defaultInstallomatorOptions[@]} ${currentArgumentArray[@]} > /dev/null 2>&1
         installomatorExitCode=$?
         if [ $installomatorExitCode != 0 ]; then
             report_message "Installomator failed to install: $currentLabel - Exit Code: $installomatorExitCode"
@@ -454,6 +486,9 @@ function process_installomator_labels()
             successList+=("$currentDisplayName")
        fi
         currentIndex=$((currentIndex+1))
+        # This gets set for use with the BailOut feature
+        previousDisplayName="$currentDisplayName"
+        check_for_bail_out
         increment_progress_bar
     done
 }
@@ -518,12 +553,12 @@ function process_scripts()
 {
 # Usage: process_scripts ProfileKey
 # Actual use: process_scripts [ InitialScripts | Scripts ]
-
     #Set an index internal to this function
     currentIndex=0
     #Loop through and test if there is a value in the slot of this index for the given array
     #If this command fails it means we've reached the end of the array in the config file (or there are none) and we exit our loop
     while $pBuddy -c "Print :${1}:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
+        check_for_bail_out
         #Unset variables for next loop
         unset expectedMD5
         unset actualMD5
@@ -637,6 +672,9 @@ function process_scripts()
 
        #Iterate index for next loop
         currentIndex=$((currentIndex+1))
+       
+        # This gets set for use with the BailOut feature
+        previousDisplayName="$currentDisplayName"
 
         #Only increment the progress bar if we're processing Scripts, not InitialScripts since users won't see those
         if [ "$1" = "Scripts" ]; then
@@ -668,6 +706,7 @@ function process_pkgs()
     #Loop through and test if there is a value in the slot of this index for the given array
     #If this command fails it means we've reached the end of the array in the config file (or there are none) and we exit our loop
     while $pBuddy -c "Print :Packages:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
+        check_for_bail_out
         # Unset variables for next loop
         unset currentPKG
         unset currentPKGPath
@@ -832,6 +871,9 @@ function process_pkgs()
         # Iterate to the next index item, and continue our loop
         currentIndex=$((currentIndex+1))
         increment_progress_bar
+        # This gets set for use with the BailOut feature
+        previousDisplayName="$currentDisplayName"
+        check_for_bail_out
     done
 }
 
@@ -881,6 +923,34 @@ function check_exit_condition()
         cleanup_and_exit "Exit Condition exists. Exiting: "$exitConditionPath""
     fi
 
+}
+
+function check_bail_out_configuration(){
+    # If BailOutFile key has a value, set it for the filepath we'll check
+    if $pBuddy -c "Print :BailOutFile" "$BaselineConfig" > /dev/null 2>&1; then
+        bailOutFilePath=$($pBuddy -c "Print :BailOutFile" "$BaselineConfig")
+    else
+        bailOutFilePath=""
+    fi
+}
+
+function check_for_bail_out(){
+    # If our BailOutFilePath has a value
+    if [ ! -z $bailOutFilePath ]; then
+        # Check if the file exists
+        if [ -f "$bailOutFilePath" ]; then
+            # Add the previousDisplayName to our failure list
+            failList+=("$previousDisplayName")
+            # Delete the bail out file
+            rm_if_exists "$bailOutFilePath"
+            #Close our running dialog window
+            dialog_command "quit:"
+            # Do the Failure window
+            present_failure_window
+            # Exit with code 99
+            cleanup_and_restart 99 "Bail out file identified: $bailOutFilePath"
+        fi
+    fi    
 }
 
 function check_restart_option()
@@ -961,18 +1031,62 @@ function set_progressbar_text()
     dialog_command "progresstext: $1"
 }
 
-#############################################
-#   Configure Default Installomator Options #
-#############################################
+function present_failure_window(){
+    #There was at least one failed item. Build fail list
+    failListItems=()
+    for i in ${failList[@]}; do
+        failListItems+=(--listitem $i)
+    done
+    #Create our Failure Dialog Window. We use a "while" loop and a nested if/then in order to bail if there's a configuration file problem.
+    #Set a timer for our attempts
+    dialogAttemptCount=1
+    #Set our exit variable for the while loop
+    dialogCompletionWindow="incomplete"
+    #Set our exit condition for the while loop
+    while [ $dialogCompletionWindow = "incomplete" ]; do
+        #If we haven't tried 10 times yet, then try to call Dialog
+        if [ "$dialogAttemptCount" -le 10 ]; then
+            #If dialog exits 0, then exit our loop
+            ${finalFailureCommand[@]} ${failListItems[@]}
+            dialogExitCode=$?
+            if [ $dialogExitCode = 0 ] || [ $dialogExitCode = 4 ] || [ $dialogExitCode = 10 ]; then
+                dialogCompletionWindow="complete"
+            fi
+            #Increment our dialog attempt count
+            sleep 1
+            dialogAttemptCount=$(( dialogAttemptCount +1 ))
+        else
+            #If we got here, dialog tried 10 times and never opened properly. Exit with a message to the log file.
+            cleanup_and_exit 1 "**WARNING** SwiftDialog failed to launch after 10 attempts. This likely indicates an issue with the options in the configuration file. Check your file paths."
+        fi
+    done
+}
 
-defaultInstallomatorOptions=(
-    BLOCKING_PROCESS_ACTION=kill
-    NOTIFY=silent
-)
-
-if [ "$dryRun" = true ]; then
-    defaultInstallomatorOptions+="DEBUG=2"
-fi
+function present_success_window(){
+    #Create our Success Dialog Window. We use a "while" loop and a nested if/then in order to bail if there's a configuration file problem.
+    #Set a timer for our attempts
+    dialogAttemptCount=1
+    #Set our exit variable for the while loop
+    dialogCompletionWindow="incomplete"
+    #Set our exit condition for the while loop
+    while [ $dialogCompletionWindow = "incomplete" ]; do
+        #If we haven't tried 10 times yet, then try to call Dialog
+        if [ "$dialogAttemptCount" -le 10 ]; then
+            #If dialog exits 0, then exit our loop
+            ${finalSuccessCommand[@]}
+            dialogExitCode=$?
+            if [ $dialogExitCode = 0 ] || [ $dialogExitCode = 4 ] || [ $dialogExitCode = 10 ]; then
+                dialogCompletionWindow="complete"
+            fi
+            #Increment our dialog attempt count
+            sleep 1
+            dialogAttemptCount=$(( dialogAttemptCount +1 ))
+        else
+            #If we got here, dialog tried 10 times and never opened properly. Exit with a message to the log file.
+            cleanup_and_exit 1 "**WARNING** SwiftDialog failed to launch after 10 attempts. This likely indicates an issue with the options in the configuration file. Check your file paths."
+        fi
+    done
+}
 
 ########################################################################################################
 ########################################################################################################
@@ -1000,6 +1114,7 @@ trap cleanup_and_exit 1 2 3 6
 #This is useful for testing, or if running the script directly (not the pkg)
 make_directory "$BaselineScripts"
 make_directory "$BaselinePackages"
+make_directory "$BaselineIcons"
 
 #Initiate Logging
 initiate_logging
@@ -1040,6 +1155,26 @@ done
 #   Verify a Configuration File is in Place #
 #############################################
 verify_configuration_file
+
+#############################################
+#   Configure Default Installomator Options #
+#############################################
+
+# Set variable for whether or not we'll use Baseline default Installomator options
+ignoreInstallomatorOptionsSetting=$($pBuddy -c "Print :IgnoreDefaultInstallomatorOptions" "$BaselineConfig" 2> /dev/null )
+
+if  [[ $ignoreInstallomatorOptionsSetting == "true" ]]; then
+    defaultInstallomatorOptions=()
+else
+defaultInstallomatorOptions=(
+    BLOCKING_PROCESS_ACTION=kill
+    NOTIFY=silent
+)
+fi
+
+if [ "$dryRun" = true ]; then
+    defaultInstallomatorOptions+="DEBUG=2"
+fi
 
 ###########################
 #   Install Installomator #
@@ -1103,6 +1238,9 @@ progressBarDisplayNames="false"
 ##############################
 #   Process Initial Scripts  #
 ##############################
+
+# Check Bail Out configuration
+check_bail_out_configuration
 
 process_scripts InitialScripts
 
@@ -1346,6 +1484,9 @@ if [ "$showProgressBar" = "true" ]; then
     dialog_command "progress: 1"
 fi
 
+# Check Bail Out configuration
+check_bail_out_configuration
+
 process_installomator_labels
 
 process_pkgs
@@ -1387,62 +1528,11 @@ dialog_command "quit:"
 #Do final script swiftDialog stuff
 #If the failList is empty, this means success
 if [ -z "$failList" ]; then
-    #Create our Success Dialog Window. We use a "while" loop and a nested if/then in order to bail if there's a configuration file problem.
-    #Set a timer for our attempts
-    dialogAttemptCount=1
-    #Set our exit variable for the while loop
-    dialogCompletionWindow="incomplete"
-    #Set our exit condition for the while loop
-    while [ $dialogCompletionWindow = "incomplete" ]; do
-        #If we haven't tried 10 times yet, then try to call Dialog
-        if [ "$dialogAttemptCount" -le 10 ]; then
-            #If dialog exits 0, then exit our loop
-            ${finalSuccessCommand[@]}
-            dialogExitCode=$?
-            if [ $dialogExitCode = 0 ] || [ $dialogExitCode = 4 ] || [ $dialogExitCode = 10 ]; then
-                dialogCompletionWindow="complete"
-            fi
-            #Increment our dialog attempt count
-            sleep 1
-            dialogAttemptCount=$(( dialogAttemptCount +1 ))
-        else
-            #If we got here, dialog tried 10 times and never opened properly. Exit with a message to the log file.
-            cleanup_and_exit 1 "**WARNING** SwiftDialog failed to launch after 10 attempts. This likely indicates an issue with the options in the configuration file. Check your file paths."
-        fi
-    done
-
+    present_success_window
     # We are done!
-    cleanup_and_restart
+    cleanup_and_restart 0
 else
-    #There was at least one failed item. Build fail list
-    failListItems=()
-    for i in ${failList[@]}; do
-        failListItems+=(--listitem $i)
-    done
-    #Create our Failure Dialog Window. We use a "while" loop and a nested if/then in order to bail if there's a configuration file problem.
-    #Set a timer for our attempts
-    dialogAttemptCount=1
-    #Set our exit variable for the while loop
-    dialogCompletionWindow="incomplete"
-    #Set our exit condition for the while loop
-    while [ $dialogCompletionWindow = "incomplete" ]; do
-        #If we haven't tried 10 times yet, then try to call Dialog
-        if [ "$dialogAttemptCount" -le 10 ]; then
-            #If dialog exits 0, then exit our loop
-            ${finalFailureCommand[@]} ${failListItems[@]}
-            dialogExitCode=$?
-            if [ $dialogExitCode = 0 ] || [ $dialogExitCode = 4 ] || [ $dialogExitCode = 10 ]; then
-                dialogCompletionWindow="complete"
-            fi
-            #Increment our dialog attempt count
-            sleep 1
-            dialogAttemptCount=$(( dialogAttemptCount +1 ))
-        else
-            #If we got here, dialog tried 10 times and never opened properly. Exit with a message to the log file.
-            cleanup_and_exit 1 "**WARNING** SwiftDialog failed to launch after 10 attempts. This likely indicates an issue with the options in the configuration file. Check your file paths."
-        fi
-    done
-
+    present_failure_window
     # We are done!
-    cleanup_and_restart
+    cleanup_and_restart 0
 fi
