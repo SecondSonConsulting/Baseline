@@ -161,7 +161,8 @@ function cleanup_and_exit()
     fi
 
     # Log message
-    log_message "Exiting: $2"
+    report_message "$2"
+    report_message "Baseline exited with error code: $1" 
 
     # Delete the Baseline LaunchDaemon
     # Doing this in a loop because I've seen edge cases where it failed unexpectedly and it is high impact.
@@ -197,7 +198,9 @@ function cleanup_and_restart()
         cleanupBaselineDirectory="true"
     fi
 
-    log_message "Exiting: $2"
+    # Log message
+    report_message "$2"
+
     # Delete the LaunchDaemon. Saw an edge case where it didn't delete once, so I made it a while loop.
     while [ -e "$BaselineLaunchDaemon" ]; do
         rm_if_exists "$BaselineLaunchDaemon"
@@ -550,7 +553,6 @@ function build_dialog_array()
             fi
 		else
 			#If no icon key is set, ensure it's blank
-			report_message "No icon set, leaving blank"
 			currentIconPath=""
 		fi
         
@@ -935,7 +937,7 @@ function check_exit_condition()
     fi
     # If our variable is set, and if the file exists, cleanup and exit quietly
     if [ -n "$exitConditionPath" ] && [ -e "$exitConditionPath" ]; then
-        cleanup_and_exit "Exit Condition exists. Exiting: "$exitConditionPath""
+        cleanup_and_exit 0 "Exit Condition exists. Exiting: "$exitConditionPath""
     fi
 
 }
@@ -1141,6 +1143,8 @@ initiate_report
 #   Process Script Arguments    #
 #################################
 
+silentModeEnabled=false
+
 while [ ! -z "$1" ]; do
     case $1 in; 
         -c|--config|--configuration)
@@ -1158,13 +1162,63 @@ while [ ! -z "$1" ]; do
                 cleanup_and_exit 81 "ERROR: Invalid configuration file: $1"
             fi
             ;;
+        -s|--silent|--silent-mode)
+            silentModeEnabled=true
+            ;;
         *)
-            echo "unknown argument: $1"
-            cleanup_and_exit 82
+            cleanup_and_exit 82 "Unknown argument: $1"
             ;;
     esac
     shift
 done
+
+############################################################
+#   De-Configure Functions and Variables for Silent Mode   #
+############################################################
+
+if $silentModeEnabled; then
+    
+    dialogPath=true
+    dialogAppPath="/System/Applications"
+
+    function dialog_command(){
+        true
+    }
+
+    function install_dialog(){
+        true
+    }
+
+    function wait_for_user(){
+        true
+    }
+
+    function build_dialog_json_file(){
+        true
+    }
+
+    function build_dialog_list_options(){
+        true
+    }
+
+    function increment_progress_bar(){
+        true
+    }
+
+    function set_progressbar_text(){
+        true
+    }
+
+    function present_failure_window(){
+        true
+    }
+
+    function present_success_window(){
+        true
+    }
+
+fi
+
 
 #############################################
 #   Verify a Configuration File is in Place #
@@ -1475,17 +1529,19 @@ build_dialog_list_options
 
 #Create our initial Dialog Window. Do this in an "until" loop, and attempts 10 times before exiting in case it fails to launch for some reason
 dialogAttemptCount=1
-until pgrep -q -x "Dialog"; do
-    if [ "$dialogAttemptCount" -le 10 ]; then
-        ${finalListCommand[@]} \
-        --commandfile "$dialogCommandFile" \
-        --jsonfile "$dialogJsonFile" \
-        & sleep 1
-        dialogAttemptCount=$(( dialogAttemptCount +1 ))
-    else
-        cleanup_and_exit 1 "**WARNING** SwiftDialog failed to launch after 10 attempts. This likely indicates an issue with the options in the configuration file. Check your file paths."
-    fi
-done
+if ! $silentModeEnabled; then
+    until pgrep -q -x "Dialog"; do
+        if [ "$dialogAttemptCount" -le 10 ]; then
+            ${finalListCommand[@]} \
+            --commandfile "$dialogCommandFile" \
+            --jsonfile "$dialogJsonFile" \
+            & sleep 1
+            dialogAttemptCount=$(( dialogAttemptCount +1 ))
+        else
+            cleanup_and_exit 1 "**WARNING** SwiftDialog failed to launch after 10 attempts. This likely indicates an issue with the options in the configuration file. Check your file paths."
+        fi
+    done
+fi
 
 #########################
 #   Install the things  #
@@ -1522,7 +1578,8 @@ else
 fi
 
 # Check if there is a custom Dialog icon and/or if we are going to reinstall
-if $forceDialogReinstall; then
+# Must be skipped if SilentMode is enabled
+if $forceDialogReinstall && ! $silentModeEnabled; then
     dialog_command "listitem: add, title: Finishing up"
     dialog_command "listitem: Finishing up: wait"
     rm_if_exists "$dialogAppPath"
@@ -1537,14 +1594,17 @@ fi
 #Close our running dialog window
 dialog_command "quit:"
 
+#^^^^
+echo "TESTING: $failList"
+
 #Do final script swiftDialog stuff
 #If the failList is empty, this means success
 if [ -z "$failList" ]; then
     present_success_window
     # We are done!
-    cleanup_and_restart 0
+    cleanup_and_restart 0 "Baseline completed - All items successful."
 else
     present_failure_window
     # We are done!
-    cleanup_and_restart 0
+    cleanup_and_restart 0 "Baseline completed - Some items failed."
 fi
