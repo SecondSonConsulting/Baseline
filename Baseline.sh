@@ -467,23 +467,38 @@ function process_installomator_labels()
         if [ -n "$currentArguments" ]; then
             eval 'for argument in '$currentArguments'; do currentArgumentArray+=$argument; done'
         fi
-
         #Get the display name of the label we're installing. We need this to update the dialog list
         currentDisplayName=$($pBuddy -c "Print :Installomator:${currentIndex}:DisplayName" "$BaselineConfig")
-        #Update the dialog window so that this item shows as "pending"
-        dialog_command "listitem: title: $currentDisplayName, status: wait"
+        
+        # Configure Installomator SwiftDialog Integration
+        useInstallomatorSwiftDialogIntegration=$($pBuddy -c "Print :InstallomatorSwiftDialogIntegration" "$BaselineConfig" 2> /dev/null)
+
+        # If we're using the integrated SwiftDialog, then
+        if  [[ $useInstallomatorSwiftDialogIntegration == "true" ]]; then
+            currentArgumentArray+="DIALOG_CMD_FILE=\"$dialogCommandFile\""
+            currentArgumentArray+=DIALOG_LIST_ITEM_NAME=\"$currentDisplayName\"
+        else
+            #Update the dialog window so that this item shows as "pending"
+            dialog_command "listitem: title: $currentDisplayName, status: wait"        
+        fi
+        
         set_progressbar_text "$currentDisplayName"
         #Call installomator with our desired options. Default options first, so that they can be overriden by "currentArguments"
         $installomatorPath $currentLabel ${defaultInstallomatorOptions[@]} ${currentArgumentArray[@]} > /dev/null 2>&1
         installomatorExitCode=$?
         if [ $installomatorExitCode != 0 ]; then
             report_message "Installomator failed to install: $currentLabel - Exit Code: $installomatorExitCode"
-            dialog_command "listitem: title: $currentDisplayName, status: fail"
             failList+=("$currentDisplayName")
+            # If we're NOT using the integrated SwiftDialog, then
+            if  [[ $useInstallomatorSwiftDialogIntegration != "true" ]]; then
+                dialog_command "listitem: title: $currentDisplayName, status: fail"
+            fi
         else
             report_message "Installomator successfully installed: $currentLabel"
-            dialog_command "listitem: title: $currentDisplayName, status: success"
             successList+=("$currentDisplayName")
+            if  [[ $useInstallomatorSwiftDialogIntegration != "true" ]]; then
+                dialog_command "listitem: title: $currentDisplayName, status: success"
+            fi
        fi
         currentIndex=$((currentIndex+1))
         # This gets set for use with the BailOut feature
@@ -1281,14 +1296,11 @@ finalFailureCommand+="$dialogPath"
 #   Configure List Customizations    #
 ######################################
 
+# Configure Installomator SwiftDialog Integration
+useInstallomatorSwiftDialogIntegration=$($pBuddy -c "Print :InstallomatorSwiftDialogIntegration" "$BaselineConfig" 2> /dev/null)
 
-# Configure Blur Screen options
-button1Enabled=$($pBuddy -c "Print :Button1Enabled" "$BaselineConfig" 2> /dev/null)
-
-if  [[ $button1Enabled == "true" ]]; then
+if  [[ $useInstallomatorSwiftDialogIntegration == "true" ]]; then
     true
-else
-    finalListCommand+="--button1disabled"
 fi
 
 # Configure Blur Screen options
