@@ -1144,6 +1144,7 @@ initiate_report
 #################################
 
 silentModeEnabled=false
+configFromArgument=false
 
 while [ ! -z "$1" ]; do
     case $1 in; 
