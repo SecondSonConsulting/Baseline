@@ -24,7 +24,7 @@ if [ "$list_result" -eq 0 ]; then
     fi
 
     # Remove plist file
-    rm "$launchDPath/$launchDName.plist" || exit_with_error "Failed to remove plist file."
+    rm "$launchDPath/$launchDName.plist" || true
 fi
 
 # Successful exit
