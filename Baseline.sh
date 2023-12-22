@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="v.2.0beta1"
+scriptVersion="v.2.0beta2"
 
 ########################################################################################################
 ########################################################################################################
@@ -101,6 +101,7 @@ function log_message()
     if [ "$verboseMode" = 1 ]; then
     	debug_message "$*"
     fi
+
 }
 
 #Report messages go to our report, but also pass through log_message (and thus, also to debug_message)
@@ -152,7 +153,7 @@ function cleanup_and_exit()
     check_restart_option
 
     # Check if we are leaving the Baseline working directory or deleting
-    cleanupAfterUse=$($pBuddy -c "Print :CleanupAfterUse" "$BaselineConfig")
+    cleanupAfterUse=$($pBuddy -c "Print :CleanupAfterUse" "$BaselineConfig" 2> /dev/null)
 
     if  [[ $cleanupAfterUse == "false" ]]; then
         cleanupBaselineDirectory="false"
@@ -190,7 +191,7 @@ function cleanup_and_restart()
     check_restart_option
 
     # Check if we are leaving the Baseline working directory or deleting
-    cleanupAfterUse=$($pBuddy -c "Print :CleanupAfterUse" "$BaselineConfig")
+    cleanupAfterUse=$($pBuddy -c "Print :CleanupAfterUse" "$BaselineConfig" 2> /dev/null )
 
     if  [ "$cleanupAfterUse" = "false" ]; then
         cleanupBaselineDirectory="false"
@@ -219,25 +220,26 @@ function cleanup_and_restart()
 
     # Determine exit configuration
     # If ForceRestart is set to false,  and dry run is off
-    if [[ $forceRestart == "true" ]] && [[ "$dryRun" != "true" ]]; then
+    if $forceRestart && ! $dryRun ; then
         report_message "Force Restart is configured. Restarting"
         # Delete Baseline Temp Dir 
         rm_if_exists "${BaselineTempDir}"
+        log_message "Forcing restart"
         shutdown -r now
     # If Force Log Out is set to true, and dry run is off
-    elif [[ $forceLogOut == "true" ]] && [[ "$dryRun" != "true" ]]; then
-        report_message "Force Log Out is set to true. Exiting"
+    elif $forceLogOut && ! $dryRun; then
+        report_message "Force Log Out is set to true."
         osascript -e "tell application \"/System/Library/CoreServices/loginwindow.app\" to «event aevtrlgo»"
         # Delete Baseline Temp Dir 
         rm_if_exists "${BaselineTempDir}"
         exit "$1"
-    # If the script is in DryRun mode
-    elif [[ $forceLogOut == "false" ]] && [[ $forceRestart == "false" ]] && [[ "$dryRun" != "true" ]]; then
+    elif ! $forceLogOut && ! $forceRestart && ! $dryRun; then
         report_message "Force Log Out and Force Restart are false. Exiting with no action."
         # Delete Baseline Temp Dir 
         rm_if_exists "${BaselineTempDir}"
         exit "$1"
-    elif [[ "$dryRun" = true ]]; then
+    # If the script is in DryRun mode
+    elif $dryRun; then
         report_message "Dry Run Enabled, no exit action taken."
         report_message "ForceRestart is set to: $forceRestart"
         report_message "ForceLogOut is set to: $forceLogOut"
@@ -503,6 +505,7 @@ function process_installomator_labels()
                 dialog_command "listitem: title: $currentDisplayName, status: success"
             fi
        fi
+        update_tracker "$currentDisplayName" $installomatorExitCode
         currentIndex=$((currentIndex+1))
         # This gets set for use with the BailOut feature
         previousDisplayName="$currentDisplayName"
@@ -624,6 +627,7 @@ function process_scripts()
             # Report the fail
             dialog_command "listitem: title: $currentDisplayName, status: fail"
             failList+=("$currentDisplayName")
+            update_tracker $currentDisplayName 99
             # Bail this pass through the while loop and continue processing next item
             continue
         fi
@@ -685,7 +689,8 @@ function process_scripts()
             report_message "Script completed successfully: $currentScript"
             dialog_command "listitem: title: $currentDisplayName, status: success"
             successList+=("$currentDisplayName")
-       fi
+        fi
+        update_tracker $currentDisplayName $scriptExitCode
 
        #Iterate index for next loop
         currentIndex=$((currentIndex+1))
@@ -749,7 +754,6 @@ function process_pkgs()
         #Check if the package path is a web URL
         if [[ ${currentPKGPath:0:4} == "http" ]]; then
             # The path to the PKG appears to be a URL.
-            #^^^ CHANGE STUFF HERE ^^^#
             #Get the basename of the .pkg we're downloading
             pkgBasename=$(basename "$currentPKGPath")
             #Set the "currentPKG" variable, this gets used as the download path as well as processed later
@@ -790,6 +794,7 @@ function process_pkgs()
             failList+=("$currentDisplayName")
             currentIndex=$((currentIndex+1))
             increment_progress_bar
+            update_tracker $currentDisplayName 99
             continue
         fi
 
@@ -863,6 +868,7 @@ function process_pkgs()
                 increment_progress_bar
                 # Report the fail
                 dialog_command "listitem: title: $currentDisplayName, status: fail"
+                update_tracker $currentDisplayName 99
                 # Bail this pass through the while loop and continue processing next item
                 continue
             else
@@ -884,6 +890,7 @@ function process_pkgs()
             dialog_command "listitem: title: $currentDisplayName, status: success"
             successList+=("$currentDisplayName")
         fi
+        update_tracker $currentDisplayName $pkgExitCode
         debug_message "Output of the install package command: $pkgInstallerOutput"
         # Iterate to the next index item, and continue our loop
         currentIndex=$((currentIndex+1))
@@ -972,32 +979,64 @@ function check_for_bail_out(){
 
 function check_restart_option()
 {
-    # Set variable for whether or not we'll force a restart. Defaults to 'true'
-    forceRestartSetting=$($pBuddy -c "Print :Restart" "$BaselineConfig" 2> /dev/null )
+    restartSetting=$($pBuddy -c "Print :Restart" "$BaselineConfig" 2> /dev/null )
+    logOutSetting=$($pBuddy -c "Print :LogOut" "$BaselineConfig" 2> /dev/null )
 
-    if  [[ "$forceRestartSetting" == "false" ]]; then
-        forceRestart="false"
-    elif  [[ "$forceRestartSetting" == "true" ]]; then
-        forceRestart="true"
-    fi
 
-    logoutSetting=$($pBuddy -c "Print :LogOut" "$BaselineConfig" 2> /dev/null )
-    if  [[ "$logoutSetting" == "true" ]]; then
-        forceLogOut="true"
-    elif  [[ "$logoutSetting" == "false" ]]; then
+    if [ -z $logOutSetting ]; then
+        log_message "No LogOut key in configuration file"
+        forceLogOut="unset"
+    elif [[ "$logOutSetting" == "true" ]]; then
+        log_message "LogOut set to true from configuration file"
+        forceLogOut=true
+    elif [[ "$logOutSetting" == "false" ]]; then
+        log_message "LogOut set to false from configuration file"
         forceLogOut="false"
+    else
+        log_message "Invalid value for LogOut key. Setting to default. Invalid Key Value: $logOutSetting"
+        forceLogOut="unset"
+    fi
+        
+    if  [ -z $restartSetting ]; then
+        log_message "No Restart key in configuration file"
+        forceRestart="unset"
+    elif [[ "$restartSetting" == "false" ]]; then
+        log_message "Force Restart set to false from configuration file."
+        forceRestart="false"
+    elif  [[ "$restartSetting" == "true" ]]; then
+        log_message "Force Restart set to true from configuration file."
+        forceRestart="true"
+    else
+        log_message "Force Restart setting invalid. Setting default. Invalid Key Value: $restartSetting"
+        forceRestart="unset"
     fi
 
     debug_message "Checking exit action variables"
-    # If neither ForceRestart or ForceLogout were configured, then set default to force Restart.
-    if [ -z $forceRestart ] && [ -z $forceLogOut ]; then
-        forceRestart="true"
-        forceLogOut="false"
-    fi
 
-    # If ForceRestart was set to true, set forceLogOut to false so that restart takes precedence
-    if [[ "$forceRestart" == "true" ]]; then
-        forceLogOut="false"
+    if [[ "$forceRestart" == "unset" ]] && [[ "$forceLogOut" == "unset" ]]; then
+        log_message "No Restart or LogOut key in configuration file. Setting default behavior to Restart"
+        forceRestart=true
+        forceLogOut=false
+    elif [[ "$forceRestart" == "true" ]]; then
+        log_message "Restart key set to true. Device will be restarted."
+        forceRestart=true
+        forceLogOut=false
+    elif [[ "$forceLogOut" == "true" ]]; then
+        log_message "LogOut key set to true. User will be logged out."
+        forceRestart=false
+        forceLogOut=true
+    elif [[ "$forceRestart" == "false" ]]; then
+        log_message "Restart key set to false. LogOut key not set to true. No restart and No LogOut will occur."
+        forceRestart=false
+        forceLogOut=false
+    elif [[ "$forceRestart" == "unset" ]] ; then
+        log_message "Restart key not in configuration file. LogOut key set to false. Device will be restarted."
+        forceRestart=true
+        forceLogOut=false
+    else
+        log_message "Unknown combination of LogOut and Restart values. Open an issue on GitHub and provide logs."
+        forceRestart=false
+        forceLogOut=false
     fi
 
 }
@@ -1105,6 +1144,66 @@ function present_success_window(){
     done
 }
 
+function initiate_tracker_file(){
+    if "$useTracker"; then
+        # Set tracker file path
+        trackerFilePath=/var/log/Baseline-$(basename "$BaselineConfig")-tracker.plist
+
+        # If tracker file already exists, verify its a valid plist
+        if [ -e "$trackerFilePath" ]; then
+            if ! $pBuddy -c Print "$trackerFilePath" > /dev/null 2>&1; then
+                report_message "Invalid tracker file. Cannot not use tracker feature."
+                useTracker=false
+            else
+                report_message "Valid tracker file found: $trackerFilePath"
+            fi
+        # Else, create the file. If we can't create it, turn off useTracker
+        else
+            if ! $pBuddy -c "Add :TrackerCreationDate integer $(date +%s)" "$trackerFilePath" > /dev/null 2>&1; then
+                report_message "Cannot write to tracker file. Cannot not use tracker feature."
+                useTracker=false
+            else
+                $pBuddy -c "Add :TrackerCreationDateReadable string $(date)" "$trackerFilePath"
+                report_message "Tracker file created: $trackerFilePath"
+            fi
+        fi
+    fi
+
+}
+
+function update_tracker(){
+    # If we're using a tracker
+    if $useTracker; then
+        currentTrackerName=$(echo "${1}" | tr -d '[:space:]' | sed "s:\'::g" | sed "s:\"::g")
+        # If we can't Add the value, it must already exist so we instead set the value.
+        if ! $pBuddy -c "Add :$currentTrackerName:LastExitCode integer $2" "$trackerFilePath" > /dev/null 2>&1; then
+            $pBuddy -c "Set :$currentTrackerName:LastExitCode $2" "$trackerFilePath"
+        fi
+        if ! $pBuddy -c "Add :$currentTrackerName:LastRun integer $(date +%s)" "$trackerFilePath" > /dev/null 2>&1; then
+            $pBuddy -c "Set :$currentTrackerName:LastRun $(date +%s)" "$trackerFilePath"
+        fi
+        # If the item was successful, update the tracker to reflect that
+        if [[ $2 = 0 ]]; then
+            if ! $pBuddy -c "Add :$currentTrackerName:LastSuccessfulCompletion integer $(date +%s)" "$trackerFilePath" > /dev/null 2>&1; then
+                $pBuddy -c "Set :$currentTrackerName:LastSuccessfulCompletion $(date +%s)" "$trackerFilePath"
+            fi
+            if ! $pBuddy -c "Add :$currentTrackerName:LastSuccessfulCompletionReadable string $(date)" "$trackerFilePath" > /dev/null 2>&1; then
+                $pBuddy -c "Set :$currentTrackerName:LastSuccessfulCompletionReadable $(date)" "$trackerFilePath"
+            fi
+        else
+            # Update the tracker to show 0/never if the item has never completed successfully
+            if ! $pBuddy -c "Print :$currentTrackerName:LastSuccessfulCompletion" "$trackerFilePath" > /dev/null 2>&1; then
+                $pBuddy -c "Add :$currentTrackerName:LastSuccessfulCompletion integer 0" "$trackerFilePath"
+            fi
+            if ! $pBuddy -c "Print :$currentTrackerName:LastSuccessfulCompletionReadable" "$trackerFilePath" > /dev/null 2>&1; then
+                $pBuddy -c "Add :$currentTrackerName:LastSuccessfulCompletionReadable string never" "$trackerFilePath"
+            fi
+        fi
+
+    fi
+}
+
+
 ########################################################################################################
 ########################################################################################################
 ##
@@ -1145,13 +1244,18 @@ initiate_report
 
 silentModeEnabled=false
 configFromArgument=false
+useTracker=false
+
+if [ -z $dryRun ]; then
+    dryRun=false
+fi
 
 while [ ! -z "$1" ]; do
     case $1 in; 
         -c|--config|--configuration)
             shift
             if [ -e "$1" ] && $pBuddy -c "Print" "${1}" > /dev/null 2>&1; then
-                echo "Using configuration profile from argument: $1"
+                log_message "Using configuration profile from argument: $1"
                 BaselineConfig="$1"
                 function verify_configuration_file(){
                     true
@@ -1165,6 +1269,9 @@ while [ ! -z "$1" ]; do
             ;;
         -s|--silent|--silent-mode)
             silentModeEnabled=true
+            ;;
+        -t|--tracker)
+            useTracker=true
             ;;
         *)
             cleanup_and_exit 82 "Unknown argument: $1"
@@ -1225,6 +1332,7 @@ fi
 #   Verify a Configuration File is in Place #
 #############################################
 verify_configuration_file
+initiate_tracker_file
 
 #############################################
 #   Configure Default Installomator Options #
@@ -1367,6 +1475,15 @@ else
     finalListCommand+="--blurscreen"
     finalSuccessCommand+="--blurscreen"
     finalFailureCommand+="--blurscreen"
+fi
+
+# Configure Blur Screen options
+button1enabled=$($pBuddy -c "Print :Button1Enabled" "$BaselineConfig" 2> /dev/null)
+
+if  [[ $button1enabled == "true" ]]; then
+    true
+else
+    finalListCommand+="--button1disabled"
 fi
 
 # Read the Dialog List `Arguments` customizations, if there are any
@@ -1595,17 +1712,16 @@ fi
 #Close our running dialog window
 dialog_command "quit:"
 
-#^^^^
-echo "TESTING: $failList"
-
 #Do final script swiftDialog stuff
 #If the failList is empty, this means success
 if [ -z "$failList" ]; then
     present_success_window
+    update_tracker "Baseline" 0
     # We are done!
     cleanup_and_restart 0 "Baseline completed - All items successful."
 else
     present_failure_window
+    update_tracker "Baseline" 1
     # We are done!
     cleanup_and_restart 0 "Baseline completed - Some items failed."
 fi
