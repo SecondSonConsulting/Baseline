@@ -1,0 +1,199 @@
+{
+    "title": "Baseline by Second Son Consulting (com.secondsonconsulting.baseline)",
+    "description": "Baseline by Second Son Consulting Configuration",
+    "properties": {
+        "InitialScripts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "DisplayName": {
+                        "type": "string",
+                        "title": "Display Name",
+                        "description": "The name you want to appear in the SwiftDialog menu as this script is run."
+                    },
+                    "ScriptPath": {
+                        "type": "string",
+                        "title": "Script Path",
+                        "description": "A path to the script you want to run. Can be a local file path or a URL."
+                    },
+                    "MD5": {
+                        "type": "string",
+                        "title": "MD5",
+                        "description": "The expected MD5 of the script being run."
+                    },
+                    "Arguments": {
+                        "type": "string",
+                        "title": "Arguments",
+                        "description": "Arguments you want to pass to the script when it is run."
+                    }
+                }
+            },
+            "title": "InitialScripts",
+            "description": "Define scripts that are run immediately as the user logs in.",
+            "property_order": 5
+        },
+        "Installomator": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "DisplayName": {
+                        "type": "string",
+                        "title": "Display Name",
+                        "description": "The name you want to appear in the SwiftDialog menu as this Installomator label is processed."
+                    },
+                    "Label": {
+                        "type": "string",
+                        "title": "Label",
+                        "description": "The Installomator label."
+                    },
+                    "Arguments": {
+                        "type": "string",
+                        "title": "Arguments",
+                        "description": "Arguments you want to pass to the Installomator command for this label."
+                    },
+                    "Icon": {
+                        "type": "string",
+                        "title": "Icon",
+                        "description": "The icon you want to appear in the SwiftDialog menu as this Installomator label is processed. Can be a URL or local file path."
+                    }
+                }
+            },
+            "title": "Installomator Labels",
+            "description": "Define Installomator labels to be run by Baseline.",
+            "property_order": 10
+        },
+        "Packages": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "DisplayName": {
+                        "type": "string",
+                        "title": "Display Name",
+                        "description": "The name you want to appear in the SwiftDialog menu as this package is installed."
+                    },
+                    "PackagePath": {
+                        "type": "string",
+                        "title": "Package Path",
+                        "description": "A path to the package you want to install. Can be a local file path or a URL."
+                    },
+                    "TeamID": {
+                        "type": "string",
+                        "title": "TeamID",
+                        "description": "The expected TeamID of the package being installed."
+                    },
+                    "MD5": {
+                        "type": "string",
+                        "title": "MD5",
+                        "description": "The expected MD5 of the package being installed."
+                    },
+                    "Arguments": {
+                        "type": "string",
+                        "title": "Arguments",
+                        "description": "Arguments you want to pass to the installer command for this package."
+                    },
+                    "Icon": {
+                        "type": "string",
+                        "title": "Icon",
+                        "description": "The icon you want to appear in the SwiftDialog menu as this package is installed. Can be a URL or local file path."
+                    }
+                }
+            },
+            "title": "Packages",
+            "description": "Define Packages to be run by Baseline",
+            "property_order": 15
+        },
+        "Scripts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "DisplayName": {
+                        "type": "string",
+                        "title": "Display Name",
+                        "description": "The name you want to appear in the SwiftDialog menu as this script is run."
+                    },
+                    "ScriptPath": {
+                        "type": "string",
+                        "title": "Script Path",
+                        "description": "A path to the script you want to run. Can be a local file path or a URL."
+                    },
+                    "MD5": {
+                        "type": "string",
+                        "title": "MD5",
+                        "description": "The expected MD5 of the script being run."
+                    },
+                    "Arguments": {
+                        "type": "string",
+                        "title": "Arguments",
+                        "description": "Arguments you want to pass to the script when it is run."
+                    },
+                    "Icon": {
+                        "type": "string",
+                        "title": "Icon",
+                        "description": "The icon you want to appear in the SwiftDialog menu as this script is run. Can be a URL or local file path."
+                    }
+                }
+            },
+            "title": "Scripts",
+            "description": "Define Scripts to be run by Baseline",
+            "property_order": 20
+        },
+        "Restart": {
+            "type": "boolean",
+            "title": "Force Restart",
+            "description": "This setting controls whether Baseline forces a restart after completion. Default is true.",
+            "property_order": 25
+        },
+        "LogOut": {
+            "type": "boolean",
+            "title": "Force Log Out",
+            "description": "This setting controls whether Baseline forces a restart after completion. Default is true.",
+            "property_order": 30
+        },
+        "ProgressBar": {
+            "type": "boolean",
+            "title": "Show Progress Bar",
+            "description": "This setting controls whether Baseline displays a progress bar. Default is false.",
+            "property_order": 35
+        },
+        "ProgressBarDisplayNames": {
+            "type": "boolean",
+            "title": "Show Display Names on Progress Bar",
+            "description": "This setting controls whether Baseline displays the current item being processed under the progress bar. Default is false.",
+            "property_order": 40
+        },
+        "CleanupAfterUse": {
+            "type": "boolean",
+            "title": "Cleanup After Use",
+            "description": "This setting controls whether Baseline deletes it's install directory after use: /usr/local/Baseline.",
+            "property_order": 45
+        },
+        "DialogListOptions": {
+            "type": "string",
+            "title": "Dialog List Window Options",
+            "description": "SwiftDialog options for the primary Baseline progress list window.",
+            "property_order": 50
+        },
+        "DialogSuccessOptions": {
+            "type": "string",
+            "title": "Dialog Success Window Options",
+            "description": "SwiftDialog options for the Success Dialog window.",
+            "property_order": 55
+        },
+        "DialogFailureOptions": {
+            "type": "string",
+            "title": "Dialog Failure Window Options",
+            "description": "SwiftDialog options for the Failure Dialog window.",
+            "property_order": 60
+        },
+        "ExitCondition": {
+            "type": "string",
+            "title": "Exit Condition",
+            "description": "Define a file or folder path. If this file or folder exists, Baseline will exit quietly without processing any items.",
+            "property_order": 65
+        }
+    }
+}

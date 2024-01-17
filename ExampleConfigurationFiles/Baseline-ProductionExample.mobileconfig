@@ -10,18 +10,24 @@
 				<dict>
 					<key>DisplayName</key>
 					<string>Google Chrome</string>
+					<key>Icon</key>
+					<string>ExampleIcon.png</string>
 					<key>Label</key>
 					<string>googlechromepkg</string>
 				</dict>
 				<dict>
 					<key>DisplayName</key>
 					<string>Microsoft Office 365</string>
+					<key>Icon</key>
+					<string>SF=doc.circle,color=blue</string>
 					<key>Label</key>
 					<string>microsoftoffice365</string>
 				</dict>
 				<dict>
 					<key>DisplayName</key>
 					<string>Zoom</string>
+					<key>Icon</key>
+					<string>SF= video.circle,color=blue</string>
 					<key>Label</key>
 					<string>zoom</string>
 				</dict>
@@ -31,6 +37,8 @@
 				<dict>
 					<key>DisplayName</key>
 					<string>Mist v0.5</string>
+					<key>Icon</key>
+					<string>https://github.com/ninxsoft/Mist/blob/main/README%20Resources/App%20Icon.png?raw=true</string>
 					<key>PackagePath</key>
 					<string>https://github.com/ninxsoft/Mist/releases/download/v0.5/Mist.0.5.pkg</string>
 					<key>TeamID</key>
@@ -44,7 +52,7 @@
 			<key>PayloadType</key>
 			<string>com.secondsonconsulting.baseline</string>
 			<key>PayloadUUID</key>
-			<string>97DE51A6-850F-46AB-98A6-BD9A80F7AF36</string>
+			<string>75A6163E-E581-4E91-88B7-17927BF9667A</string>
 			<key>PayloadVersion</key>
 			<integer>1</integer>
 			<key>Scripts</key>
@@ -52,6 +60,8 @@
 				<dict>
 					<key>DisplayName</key>
 					<string>Enabling Location Services</string>
+					<key>Icon</key>
+					<string>/System/Library/PrivateFrameworks/AOSUI.framework/Versions/A/Resources/findmy.icns</string>
 					<key>MD5</key>
 					<string>c32364f1f3f7fc2410e265d82095feee</string>
 					<key>ScriptPath</key>
@@ -73,7 +83,7 @@
 	<key>PayloadType</key>
 	<string>Configuration</string>
 	<key>PayloadUUID</key>
-	<string>B842AE0F-70AE-4C1C-8556-D28F10168D89</string>
+	<string>BEDFC054-5B20-430F-B388-A51C3B4D30AE</string>
 	<key>PayloadVersion</key>
 	<integer>1</integer>
 </dict>
