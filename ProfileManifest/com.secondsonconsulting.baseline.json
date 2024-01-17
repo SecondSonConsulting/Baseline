@@ -153,47 +153,83 @@
             "description": "This setting controls whether Baseline forces a restart after completion. Default is true.",
             "property_order": 30
         },
+        "BlurScreen": {
+            "type": "boolean",
+            "title": "Blur Screen",
+            "description": "This setting controls whether Baseline uses the SwiftDialog --blurscreen feature. Default is true. If you set to false, consider using --ontop in your DialogListOptions key",
+            "property_order": 35
+        },
         "ProgressBar": {
             "type": "boolean",
             "title": "Show Progress Bar",
             "description": "This setting controls whether Baseline displays a progress bar. Default is false.",
-            "property_order": 35
+            "property_order": 40
         },
         "ProgressBarDisplayNames": {
             "type": "boolean",
             "title": "Show Display Names on Progress Bar",
             "description": "This setting controls whether Baseline displays the current item being processed under the progress bar. Default is false.",
-            "property_order": 40
+            "property_order": 45
         },
         "CleanupAfterUse": {
             "type": "boolean",
             "title": "Cleanup After Use",
             "description": "This setting controls whether Baseline deletes it's install directory after use: /usr/local/Baseline.",
-            "property_order": 45
+            "property_order": 50
+        },
+        "ReinstallDialog": {
+            "type": "boolean",
+            "title": "Reinstall SwiftDialog",
+            "description": "This setting controls whether Baseline will reinstall SwiftDialog as the final step before completion. Default behavior if this key is omitted will reinstall SwiftDialog if a custom PNG is found in /Library/Application Support/Dialog/Dialog.png.",
+            "property_order": 55
+        },
+        "InstallomatorSwiftDialogIntegration": {
+            "type": "boolean",
+            "title": "Use Installomator SwiftDialog Integration",
+            "description": "Tell Installomator to use it's built in SwiftDialog integration for the List View. Default is false.",
+            "property_order": 60
+        },
+        "IgnoreDefaultInstallomatorOptions": {
+            "type": "boolean",
+            "title": "Ignore Default Installomator Options",
+            "description": "By default, Baseline uses \"NOTIFY=silent\" and \"BLOCKING_PROCESS_ACTION=kill\" Installomator options. Setting this to True means Baseline will not use those options.",
+            "property_order": 65
+        },
+        "Button1Enabled": {
+            "type": "boolean",
+            "title": "Button 1 Enabled",
+            "description": "This setting enables SwiftDialog \"Button 1\" (the OK button) on the Baseline List View. This allows users to dismiss the list view and continue working while Baseline runs. By default this button is disabled.",
+            "property_order": 70
         },
         "DialogListOptions": {
             "type": "string",
             "title": "Dialog List Window Options",
             "description": "SwiftDialog options for the primary Baseline progress list window.",
-            "property_order": 50
+            "property_order": 75
         },
         "DialogSuccessOptions": {
             "type": "string",
             "title": "Dialog Success Window Options",
             "description": "SwiftDialog options for the Success Dialog window.",
-            "property_order": 55
+            "property_order": 80
         },
         "DialogFailureOptions": {
             "type": "string",
             "title": "Dialog Failure Window Options",
             "description": "SwiftDialog options for the Failure Dialog window.",
-            "property_order": 60
+            "property_order": 85
         },
         "ExitCondition": {
             "type": "string",
             "title": "Exit Condition",
             "description": "Define a file or folder path. If this file or folder exists, Baseline will exit quietly without processing any items.",
-            "property_order": 65
+            "property_order": 90
+        },
+        "BailOutFile": {
+            "type": "string",
+            "title": "Bail Out File",
+            "description": "Define a file path. If this file exists at any point while Baseline is running, Baseline will exit and will not process additional items.",
+            "property_order": 95
         }
     }
 }
