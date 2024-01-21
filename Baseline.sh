@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="v.2.0"
+scriptVersion="v.2.1beta1"
 
 ########################################################################################################
 ########################################################################################################
@@ -559,9 +559,17 @@ function build_dialog_array()
 			currentIconPath=""
 		fi
         
+		#Get the desired subtitle if populated in the configuration profile
+        if $pBuddy -c "Print :$configKey:${index}:Subtitle" "$BaselineConfig" > /dev/null 2>&1; then
+			currentSubtitle=$($pBuddy -c "Print :$configKey:${index}:Subtitle" "$BaselineConfig")
+		else
+			#If no icon key is set, ensure it's blank
+			currentSubtitle=""
+		fi
+        
         #Generate JSON entry for item
         #NOTE: We will strip out the final comma later to ensure a valid JSON
-        dialogListJson+="{\"title\" : \"$currentDisplayName\", \"icon\" : \"$currentIconPath\", \"status\" : \"\"},"
+        dialogListJson+="{\"title\" : \"$currentDisplayName\",\"subtitle\" : \"$currentSubtitle\", \"icon\" : \"$currentIconPath\", \"status\" : \"\"},"
 
         #Done looping. Increase our array value and loop again.
         index=$((index+1))
