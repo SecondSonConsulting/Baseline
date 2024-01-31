@@ -1350,6 +1350,7 @@ fi
 #   Verify a Configuration File is in Place #
 #############################################
 verify_configuration_file
+check_silent_option
 initiate_tracker_file
 
 #############################################
