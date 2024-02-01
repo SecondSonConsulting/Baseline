@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="v.2.0"
+scriptVersion="v.2.1-SilentModeConfig"
 
 ########################################################################################################
 ########################################################################################################
@@ -1260,7 +1260,8 @@ initiate_report
 #   Process Script Arguments    #
 #################################
 
-silentModeEnabled=false
+check_silent_option
+
 configFromArgument=false
 useTracker=false
 
