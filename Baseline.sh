@@ -1736,6 +1736,7 @@ dialog_command "quit:"
 #Do final script swiftDialog stuff
 #If the failList is empty, this means success
 if [ -z "$failList" ]; then
+    # We don't want to show Success Window in Silent Mode
     if [ "$silentModeEnabled" = false ]; then
         present_success_window
     fi
@@ -1743,6 +1744,7 @@ if [ -z "$failList" ]; then
     # We are done!
     cleanup_and_restart 0 "Baseline completed - All items successful."
 else
+    # We don't want to show Failure Window in Silent Mode
     if [ "$silentModeEnabled" = false ]; then
         present_failure_window
     fi
