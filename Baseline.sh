@@ -1460,6 +1460,9 @@ check_progress_options
 # Check if there is an Icons directory, and if so make a temporary copy of it
 copy_icons_dir
 
+# Check if we're running the script in Silent Mode
+check_silent_option
+
 #####################################
 #   Initiate Dialog Option Arays    #
 #####################################
