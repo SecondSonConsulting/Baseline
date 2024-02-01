@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="v.2.1-SilentModeConfig"
+scriptVersion="dev"
 
 ########################################################################################################
 ########################################################################################################
