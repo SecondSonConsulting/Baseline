@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="v.2.0"
+scriptVersion="dev"
 
 ########################################################################################################
 ########################################################################################################
@@ -1203,6 +1203,24 @@ function update_tracker(){
     fi
 }
 
+function check_silent_option()
+{
+    silentModeEnabled=$($pBuddy -c "Print :SilentMode" "$BaselineConfig" 2> /dev/null )
+
+    if [ -z $silentModeEnabled ]; then
+        log_message "No SilentMode key in configuration file"
+        silentModeEnabled="false"
+    elif [[ "$silentModeEnabled" == "true" ]]; then
+        log_message "SilentMode set to true from configuration file"
+        silentModeEnabled=true
+    elif [[ "$silentModeEnabled" == "false" ]]; then
+        log_message "SilentMode set to false from configuration file"
+        silentModeEnabled="false"
+    else
+        log_message "Invalid value for SilentMode key. Setting to default. Invalid Key Value: $silentModeEnabled"
+        silentModeEnabled="false"
+    fi
+}
 
 ########################################################################################################
 ########################################################################################################
@@ -1242,7 +1260,8 @@ initiate_report
 #   Process Script Arguments    #
 #################################
 
-silentModeEnabled=false
+check_silent_option
+
 configFromArgument=false
 useTracker=false
 
