@@ -6,9 +6,11 @@
     - Using `--silent` at the command line overrides the settings in the configuration profile
 
 
+
 # Bugs and Housekeeping
 - Moved Report file from `/usr/local/Baseline/Baseline-Report.txt` to `/var/log/Baseline-Report.txt`
 - Improved logging function and used standard language for logging item progress/details
+- Fixed a bug where Baseline would exit when run from Jamf due to Jamf default script parameters
 
 # Additional Goals
 - Move more features over to the json file, that way we don't run into shell length issues if someone puts a long `--message` or `--infobox` string
