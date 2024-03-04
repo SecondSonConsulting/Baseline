@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="v.2.0"
+scriptVersion="v.2.0.1"
 
 ########################################################################################################
 ########################################################################################################
@@ -1252,6 +1252,10 @@ fi
 
 while [ ! -z "$1" ]; do
     case $1 in; 
+        "/")
+            log_message "Shifting arguments for Jamf"
+            shift 2
+            ;;
         -c|--config|--configuration)
             shift
             if [ -e "$1" ] && $pBuddy -c "Print" "${1}" > /dev/null 2>&1; then
