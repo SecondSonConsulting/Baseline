@@ -22,9 +22,9 @@
 			<array>
 				<dict>
 					<key>DisplayName</key>
-					<string>Google Chrome</string>
+					<string>Firefox</string>
 					<key>Label</key>
-					<string>googlechromepkg</string>
+					<string>firefoxpkg</string>
 				</dict>
 				<dict>
 					<key>DisplayName</key>
