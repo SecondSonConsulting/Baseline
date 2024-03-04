@@ -6,7 +6,8 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="v.2.1beta1"
+scriptVersion="dev"
+
 
 ########################################################################################################
 ########################################################################################################
@@ -1211,6 +1212,77 @@ function update_tracker(){
     fi
 }
 
+function check_silent_option()
+{
+    # If silentMode hasn't been set yet, check if its in our configuration file.
+    if [ -z "$silentModeEnabled" ]; then
+        # This will exit empty if the key does not exist.
+        silentModeEnabled=$($pBuddy -c "Print :SilentMode" "$BaselineConfig" 2> /dev/null )
+    fi
+
+    if [ -z $silentModeEnabled ]; then
+        log_message "No SilentMode key in configuration file"
+        silentModeEnabled="false"
+    elif [[ "$silentModeEnabled" == "true" ]]; then
+        log_message "SilentMode set to true from configuration file"
+        silentModeEnabled=true
+    elif [[ "$silentModeEnabled" == "false" ]]; then
+        log_message "SilentMode set to false from configuration file"
+        silentModeEnabled="false"
+    else
+        log_message "Invalid value for SilentMode key. Setting to default. Invalid Key Value: $silentModeEnabled"
+        silentModeEnabled="false"
+    fi
+
+    configure_silent_mode
+}
+
+configure_silent_mode(){
+    # If silentMode is enabled, rewrite all functions which use SwiftDialog to `true`
+    # This effectively takes SwiftDialog entirely out of use.
+    if $silentModeEnabled; then
+        
+        dialogPath=true
+        dialogAppPath="/System/Applications"
+
+        function dialog_command(){
+            true
+        }
+
+        function install_dialog(){
+            true
+        }
+
+        function wait_for_user(){
+            true
+        }
+
+        function build_dialog_json_file(){
+            true
+        }
+
+        function build_dialog_list_options(){
+            true
+        }
+
+        function increment_progress_bar(){
+            true
+        }
+
+        function set_progressbar_text(){
+            true
+        }
+
+        function present_failure_window(){
+            true
+        }
+
+        function present_success_window(){
+            true
+        }
+
+    fi
+}
 
 ########################################################################################################
 ########################################################################################################
@@ -1250,7 +1322,6 @@ initiate_report
 #   Process Script Arguments    #
 #################################
 
-silentModeEnabled=false
 configFromArgument=false
 useTracker=false
 
@@ -1292,54 +1363,13 @@ done
 #   De-Configure Functions and Variables for Silent Mode   #
 ############################################################
 
-if $silentModeEnabled; then
-    
-    dialogPath=true
-    dialogAppPath="/System/Applications"
-
-    function dialog_command(){
-        true
-    }
-
-    function install_dialog(){
-        true
-    }
-
-    function wait_for_user(){
-        true
-    }
-
-    function build_dialog_json_file(){
-        true
-    }
-
-    function build_dialog_list_options(){
-        true
-    }
-
-    function increment_progress_bar(){
-        true
-    }
-
-    function set_progressbar_text(){
-        true
-    }
-
-    function present_failure_window(){
-        true
-    }
-
-    function present_success_window(){
-        true
-    }
-
-fi
 
 
 #############################################
 #   Verify a Configuration File is in Place #
 #############################################
 verify_configuration_file
+check_silent_option
 initiate_tracker_file
 
 #############################################
@@ -1545,7 +1575,6 @@ fi
 if [ "$progressBarDisplayNames" = "true" ]; then
     configure_dialog_list_arguments "--progresstext" ' '
 fi
-
 
 #########################################
 #   Configure Success Customizations    #
