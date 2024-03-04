@@ -63,8 +63,7 @@ chmod -R 655 "${BaselineTempDir}"
 #   Logging and Housekeeping    #
 #################################
 
-function check_root()
-{
+function check_root(){
 
 # check we are running as root
 if [[ $(id -u) -ne 0 ]]; then
@@ -75,8 +74,7 @@ if [[ $(id -u) -ne 0 ]]; then
 fi
 }
 
-function make_directory()
-{
+function make_directory(){
     if [ ! -d "${1}" ]; then
         debug_message "Folder does not exist. Making it: ${1}"
         mkdir -p "${1}"
@@ -84,36 +82,37 @@ function make_directory()
 }
 
 #Used only for debugging. Gives feedback into standard out if verboseMode=1, also to $logFile if you set it
-function debug_message()
-{
+function debug_message(){
     if [ "$verboseMode" = 1 ]; then
     	/bin/echo "DEBUG: $*"
     fi
 }
 
 #Publish a message to the log (and also to the debug channel)
-function log_message()
-{
-    if [ -e "$logFile" ]; then
-    	/bin/echo "$(date): $*" >> "$logFile"
-    fi
+function log_message(){
+    echo "$(date): $*" | tee >( cat >> "$logFile" ) 
+    debug_message "$*"
+}
 
-    if [ "$verboseMode" = 1 ]; then
-    	debug_message "$*"
+function rotate_logs(){
+    touch "$logFile"
+    chmod 655 "$logFile"
+    if [ "$(wc -l < "$logFile" | xargs)" -ge 30000 ]; then
+        log_message "Rotating Logs"
+        mv "$logFile" "$logFile".old
+	    touch "$logFile"
+	    log_message "Logfile Rotated"
     fi
-
 }
 
 #Report messages go to our report, but also pass through log_message (and thus, also to debug_message)
-function report_message()
-{
+function report_message(){
     /bin/echo "$@" >> "$reportFile"
     log_message "$@"
 }
 
 # Initiate logging
-function initiate_logging()
-{
+function initiate_logging(){
 if ! touch "$logFile" ; then
     debug_message "ERROR: Logging fail. Cannot create log file"
     # Delete Baseline Temp Dir 
@@ -125,15 +124,13 @@ fi
 }
 
 #Only delete something if the variable has a value!
-function rm_if_exists()
-{
+function rm_if_exists(){
     if [ -n "${1}" ] && [ -e "${1}" ];then
         /bin/rm -rf "${1}"
     fi
 }
 
-function initiate_report()
-{
+function initiate_report(){
     reportFile="/usr/local/Baseline/Baseline-Report.txt"
     if ! touch "$reportFile" ; then
         debug_message "ERROR: Reporting fail. Cannot create report file"
@@ -147,8 +144,7 @@ function initiate_report()
 }
 
 #Define our script exit process. Usage: cleanup_and_exit 'exitcode' 'exit message'
-function cleanup_and_exit()
-{
+function cleanup_and_exit(){
     # Check if we are going to restart
     check_restart_option
 
@@ -185,8 +181,7 @@ function cleanup_and_exit()
 
 # This function doesn't always shut down, but I'm leaving the name in place for now at least.
 # Usage: cleanup_and_exit 'exitcode' 'exit message'
-function cleanup_and_restart()
-{
+function cleanup_and_restart(){
     # Check if we are going to restart
     check_restart_option
 
@@ -255,8 +250,7 @@ function cleanup_and_restart()
     shutdown -r now
 }
 
-function no_sleeping()
-{
+function no_sleeping(){
 
     /usr/bin/caffeinate -d -i -m -u &
     caffeinatepid=$!
@@ -272,8 +266,7 @@ function dialog_command(){
 #This function is modified from the awesome one given to us via Adam Codega. Thanks Adam!
 #https://github.com/acodega/dialog-scripts/blob/main/dialogCheckFunction.sh
 
-function install_dialog()
-{
+function install_dialog(){
 
     # Check for Dialog and install if not found. We'll try 10 times before exiting the script with a fail.
     dialogInstallAttempts=0
@@ -314,8 +307,7 @@ function install_dialog()
     done
 }
 
-function install_installomator()
-{
+function install_installomator(){
 
     # Check for Installomator and install if not found. We'll try 10 times before exiting the script with a fail.
     installomatorInstallAttempts=0
@@ -353,8 +345,7 @@ function install_installomator()
 }
 
 #Checks if a user is logged in yet, and if not it waits and loops until we can confirm there is a real user
-function wait_for_user()
-{
+function wait_for_user(){
     #Set our test to false
     verifiedUser="false"
 
@@ -387,16 +378,14 @@ function wait_for_user()
 }
 
 #Check for custom config. We prioritize this even over a mobileconfig file.
-function check_for_custom_plist()
-{
+function check_for_custom_plist(){
     if [ -e $customConfigPlist ] && ! $configFromArgument; then
         BaselineConfig="$customConfigPlist"
     fi
 }
 
 #Verify configuration file
-function verify_configuration_file()
-{
+function verify_configuration_file(){
     #We need to make sure our configuration file is in place. By the time the user logs in, this should have happened.
     debug_message "Verifying configuration file. Failure here probably means an MDM profile hasn't been properly scoped, or there's a problem with the MDM delivering the profile."
     
@@ -428,8 +417,7 @@ function verify_configuration_file()
     fi
 }
 
-function build_installomator_array()
-{
+function build_installomator_array(){
     #Set an index internal to this function
     index=0
     #Loop through and test if there is a value in the slot of this index for the given array
@@ -444,8 +432,7 @@ function build_installomator_array()
     done
 }
 
-function process_installomator_labels()
-{
+function process_installomator_labels(){
     #Set an index internal to this function
     currentIndex=0
     #Loop through and test if there is a value in the slot of this index for the given array
@@ -515,8 +502,7 @@ function process_installomator_labels()
 }
 
 # Our main list builder for the Dialog window
-function build_dialog_array()
-{
+function build_dialog_array(){
     ## Usage: Build the dialog array for the given profile configuration key. $1 is the name of the key
     ## Example: build_dialog_array Scripts | InitialScripts | Packages | Installomator
 
@@ -569,8 +555,7 @@ function build_dialog_array()
     done
 }
 
-function process_scripts()
-{
+function process_scripts(){
 # Usage: process_scripts ProfileKey
 # Actual use: process_scripts [ InitialScripts | Scripts ]
     #Set an index internal to this function
@@ -705,8 +690,7 @@ function process_scripts()
     done
 }
 
-function build_pkg_arrays()
-{
+function build_pkg_arrays(){
     #Set an index internal to this function
     index=0
     #Loop through and test if there is a value in the slot of this index for the given array
@@ -721,8 +705,7 @@ function build_pkg_arrays()
     done
 }
 
-function process_pkgs()
-{
+function process_pkgs(){
     #Set an index internal to this function
     currentIndex=0
     #Loop through and test if there is a value in the slot of this index for the given array
@@ -908,8 +891,7 @@ function copy_icons_dir(){
     fi
 }
 
-function build_dialog_json_file()
-{
+function build_dialog_json_file(){
     # Initiate Json file
     /bin/echo "{\"listitem\" : [" >> $dialogJsonFile
     # For each item in our list, add the Json line
@@ -927,16 +909,14 @@ function build_dialog_json_file()
 
 }
 
-function build_dialog_list_options()
-{
+function build_dialog_list_options(){
     # This function populates an array with all of the items Baseline iterates through
     for i in $dialogList; do
         dialogListItems+=(--listitem $i)
     done
 }
 
-function check_exit_condition()
-{
+function check_exit_condition(){
     exitConditionPath=""
     # If `ExitCondition` key is passed in the configuration profile, then set a variable
     if $pBuddy -c "Print :ExitCondition" "$BaselineConfig" > /dev/null 2>&1; then
@@ -977,8 +957,7 @@ function check_for_bail_out(){
     fi    
 }
 
-function check_restart_option()
-{
+function check_restart_option(){
     restartSetting=$($pBuddy -c "Print :Restart" "$BaselineConfig" 2> /dev/null )
     logOutSetting=$($pBuddy -c "Print :LogOut" "$BaselineConfig" 2> /dev/null )
 
@@ -1041,8 +1020,7 @@ function check_restart_option()
 
 }
 
-function check_progress_options()
-{
+function check_progress_options(){
     # Set variable for whether or not we'll display a progress bar. Defaults to 'false'
     showProgressBarSetting=$($pBuddy -c "Print :ProgressBar" "$BaselineConfig" 2> /dev/null )
 
@@ -1062,8 +1040,7 @@ function check_progress_options()
     fi
 }
 
-function increment_progress_bar()
-{
+function increment_progress_bar(){
     # If we're not displaying the progress bar, skip
     if [ "$showProgressBar" != "true" ]; then
         return
@@ -1077,8 +1054,7 @@ function increment_progress_bar()
     dialog_command "progress: $progressBarPercentage"
 }
 
-function set_progressbar_text()
-{
+function set_progressbar_text(){
     # If we're not displaying the progress bar, skip
     if [ "$progressBarDisplayNames" != "true" ]; then
         return
@@ -1203,8 +1179,7 @@ function update_tracker(){
     fi
 }
 
-function check_silent_option()
-{
+function check_silent_option(){
     # If silentMode hasn't been set yet, check if its in our configuration file.
     if [ -z "$silentModeEnabled" ]; then
         # This will exit empty if the key does not exist.
@@ -1529,8 +1504,7 @@ fi
 # I also don't know how to set the variable by passing the name of that variable as an argument to the function.
 # So I'll have to define this function several times.
 # I grow old … I grow old …I shall wear the bottoms of my trousers rolled..
-function configure_dialog_list_arguments()
-{
+function configure_dialog_list_arguments(){
     # $1 is the SwiftDialog option to change, $2 is the default value for that option if its not included in the profile
     if (($dialogListArguments[(Ie)$1])); then
         # $1 was included in the customization, so we report it and move along
@@ -1581,8 +1555,7 @@ if [ -n "$dialogSuccessArguments" ]; then
     eval 'for customization in '$dialogSuccessArguments'; do finalSuccessCommand+=$customization; done'
 fi
 
-function configure_dialog_success_arguments()
-{
+function configure_dialog_success_arguments(){
     # $1 is the SwiftDialog option to change, $2 is the default value for that option if its not included in the profile
     if (($dialogSuccessArguments[(Ie)$1])); then
         # $1 was included in the customization, so we report it and move along
@@ -1627,8 +1600,7 @@ if [ -n "$dialogFailureArguments" ]; then
     eval 'for customization in '$dialogFailureArguments'; do finalFailureCommand+=$customization; done'
 fi
 
-function configure_dialog_failure_arguments()
-{
+function configure_dialog_failure_arguments(){
     # $1 is the SwiftDialog option to change, $2 is the default value for that option if its not included in the profile
     if (($dialogFailureArguments[(Ie)$1])); then
         # $1 was included in the customization, so we report it and move along
