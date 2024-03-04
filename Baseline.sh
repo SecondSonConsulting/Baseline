@@ -1198,7 +1198,7 @@ function check_silent_option(){
         log_message "No SilentMode key in configuration file"
         silentModeEnabled="false"
     elif [[ "$silentModeEnabled" == "true" ]]; then
-        log_message "SilentMode set to true from configuration file"
+        log_message "SilentMode set to true"
         silentModeEnabled=true
     elif [[ "$silentModeEnabled" == "false" ]]; then
         log_message "SilentMode set to false from configuration file"
@@ -1321,6 +1321,7 @@ while [ ! -z "$1" ]; do
             fi
             ;;
         -s|--silent|--silent-mode)
+            log_message "Setting Silent Mode from Command-Line"
             silentModeEnabled=true
             ;;
         -t|--tracker)
