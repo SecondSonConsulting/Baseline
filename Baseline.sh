@@ -30,6 +30,7 @@ BaselineDir="/usr/local/Baseline"
 BaselineTempDir="$(mktemp -d /var/tmp/baselineTempDir.XXXXXXX)"
 customConfigPlist="$BaselineDir/BaselineConfig.plist"
 logFile="/var/log/Baseline.log"
+reportFile="/var/log/Baseline-Report.txt"
 BaselinePath="$BaselineDir/Baseline.sh"
 BaselineScripts="$BaselineDir/Scripts"
 BaselinePackages="$BaselineDir/Packages"
@@ -131,7 +132,6 @@ function rm_if_exists(){
 }
 
 function initiate_report(){
-    reportFile="/usr/local/Baseline/Baseline-Report.txt"
     if ! touch "$reportFile" ; then
         debug_message "ERROR: Reporting fail. Cannot create report file"
         # Delete Baseline Temp Dir 
@@ -372,7 +372,6 @@ function wait_for_user(){
     debug_message "Disabling verbose output to prevent logspam while waiting for user at timestamp: $(date +%s)"
     set +x
     done
-    set -x
     debug_message "Re-enabling verbose output after finding user at timestamp: $(date +%s)"
 
 }
@@ -479,14 +478,14 @@ function process_installomator_labels(){
         $installomatorPath $currentLabel ${defaultInstallomatorOptions[@]} ${currentArgumentArray[@]} > /dev/null 2>&1
         installomatorExitCode=$?
         if [ $installomatorExitCode != 0 ]; then
-            report_message "Installomator failed to install: $currentLabel - Exit Code: $installomatorExitCode"
+            report_message "Failed Item - Installomator: $currentLabel - Exit Code: $installomatorExitCode"
             failList+=("$currentDisplayName")
             # If we're NOT using the integrated SwiftDialog, then
             if  [[ $useInstallomatorSwiftDialogIntegration != "true" ]]; then
                 dialog_command "listitem: title: $currentDisplayName, status: fail"
             fi
         else
-            report_message "Installomator successfully installed: $currentLabel"
+            report_message "Successful Item - Installomator: $currentLabel"
             successList+=("$currentDisplayName")
             if  [[ $useInstallomatorSwiftDialogIntegration != "true" ]]; then
                 dialog_command "listitem: title: $currentDisplayName, status: success"
@@ -524,20 +523,20 @@ function build_dialog_array(){
 			currentIconPath=$($pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig")
 			# Check if Icon is remotely hosted URL
             if [[ ${currentIconPath:0:4} == "http" ]]; then
-                report_message "Icon set to URL: $currentIconPath"
+                log_message "Icon set to URL: $currentIconPath"
             # Check if Icon is an SF Symbol
 			elif [[ ${currentIconPath:0:3} == 'SF=' ]]; then
-                report_message "Icon set to SF Symbol: $currentIconPath"
+                log_message "Icon set to SF Symbol: $currentIconPath"
 			#Check of the given icon path exists on disk
 			elif [ -e "$currentIconPath" ]; then
-				report_message "Icon found: $currentIconPath"
+				log_message "Icon found: $currentIconPath"
 			elif [ -e "$BaselineTempIconsDir/$currentIconPath" ]; then
-				report_message "Icon found: $currentIconPath"
+				log_message "Icon found: $currentIconPath"
                 currentIconPath="$BaselineTempIconsDir/$currentIconPath"
                 chmod 655 "${currentIconPath}"
 			else
                 #If we can't find the local file, report and leave blank
-                report_message "ERROR: Icon key cannot be located: $currentIconPath"
+                log_message "ERROR: Icon key cannot be located: $currentIconPath"
                 currentIconPath=""
             fi
 		else
@@ -588,11 +587,11 @@ function process_scripts(){
             #Check if curl exited cleanly
             if [ "$scriptDownloadExitCode" != 0 ];then
                 #Report a failed download
-                report_message "ERROR: Script failed to download. Check your URL: $currentScriptPath"
+                report_message "Failed Item - Script download error: $currentScriptPath"
                 #Rm the output of our curl command. This will result in it being processed as a failure
                 rm_if_exists "$currentScript"
             else
-                report_message "Script downloaded successfully: $currentScriptPath"
+                log_message "Script downloaded successfully: $currentScriptPath"
                 #Make our downloaded script executable
                 chmod +x "$currentScript"
             fi
@@ -605,7 +604,7 @@ function process_scripts(){
         fi
         #If the currentScript variable still isn't set to an existing file we need to bail..
         if [ ! -e "$currentScript" ]; then
-            report_message "ERROR: Script does not exist: $currentScript"
+            report_message "Failed Item - Script does not exist: $currentScript"
             # Iterate the index up one
             currentIndex=$((currentIndex+1))
             increment_progress_bar
@@ -625,7 +624,7 @@ function process_scripts(){
             actualMD5=$(md5 -q "$currentScript")
             #Evaluate whether the expected and actual MD5 do not match
             if [ "$actualMD5" != "$expectedMD5" ]; then
-                report_message "ERROR: MD5 value mismatch. Expected: $expectedMD5 Actual: $actualMD5"
+                report_message "Failed Item - Script MD5 error: $currentScriptPath - Expected $expectedMD5 - Actual $actualMD5"
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 # Only increment the progress bar if we're processing Scripts, not InitialScripts since users won't see those
@@ -667,11 +666,11 @@ function process_scripts(){
         "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
         scriptExitCode=$?
         if [ $scriptExitCode != 0 ]; then
-            report_message "Script failed to complete: $currentScript - Exit Code: $scriptExitCode"
+            report_message "Failed Item - Script runtime error: $currentScript - Exit Code: $scriptExitCode"
             dialog_command "listitem: title: $currentDisplayName, status: fail"
             failList+=("$currentDisplayName")
         else
-            report_message "Script completed successfully: $currentScript"
+            report_message "Successful Item - Script: $currentScript"
             dialog_command "listitem: title: $currentDisplayName, status: success"
             successList+=("$currentDisplayName")
         fi
@@ -749,7 +748,7 @@ function process_pkgs(){
             downloadResult=$?
             #Verify curl exited with 0
             if [ "$downloadResult" != 0 ]; then
-                report_message "ERROR: PKG failed to download: $currentPKGPath"
+                report_message "Failed Item - Package download error: $currentPKGPath"
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 increment_progress_bar
@@ -758,7 +757,7 @@ function process_pkgs(){
                 # Bail this pass through the while loop and continue processing next item
                 continue
             else
-                debug_message "PKG downloaded successfully: $currentPKGPath downloaded to $currentPKG"
+                debug_message "PKG downloaded successfully: $currentPKGPath"
             fi
         fi
         
@@ -772,7 +771,7 @@ function process_pkgs(){
             # The path to the PKG appears to exist within Baseline directory
             currentPKG="$BaselinePackages/$currentPKGPath"
         else
-            report_message "Package not found $currentPKGPath"
+            report_message "Failed Item - Package does not exist: $currentPKGPath"
             dialog_command "listitem: title: $currentDisplayName, status: fail"
             failList+=("$currentDisplayName")
             currentIndex=$((currentIndex+1))
@@ -822,7 +821,7 @@ function process_pkgs(){
             actualTeamID=$(spctl -a -vv -t install "$currentPKG" 2>&1 | awk -F '(' '/origin=/ {print $2 }' | tr -d ')' )
             # Check if actual does not match expected
             if [ "$expectedTeamID" != "$actualTeamID" ]; then
-                report_message "TeamID validation of PKG failed: $currentPKG - Expected: $expectedTeamID Actual: $actualTeamID"
+                report_message "Failed Item - Package TeamID error: $currentPKG - Expected - $expectedTeamID Actual - $actualTeamID"
                 dialog_command "listitem: title: $currentDisplayName, status: fail"
                 failList+=("$currentDisplayName")
                 # Iterate the index up one
@@ -833,7 +832,7 @@ function process_pkgs(){
                 # Bail this pass through the while loop and continue processing next item
                 continue
             else
-                report_message "TeamID of PKG validated: $currentPKG $expectedTeamID"
+                log_message "TeamID of PKG validated: $currentPKG $expectedTeamID"
             fi
         fi
         
@@ -843,7 +842,7 @@ function process_pkgs(){
             actualMD5=$(md5 -q "$currentPKG")
             # Check if actual does not match expected
             if [ "$expectedMD5" != "$actualMD5" ]; then
-                report_message "MD5 validation of PKG failed: $currentPKG - Expected: $expectedMD5 Actual: $actualMD5"
+                report_message "Failed Item - Package MD5 error: $currentPKG - Expected - $expectedMD5 Actual - $actualMD5"
                 dialog_command "listitem: title: $currentDisplayName, status: fail"
                 failList+=("$currentDisplayName")
                 # Iterate the index up one
@@ -855,7 +854,7 @@ function process_pkgs(){
                 # Bail this pass through the while loop and continue processing next item
                 continue
             else
-                report_message "MD5 of PKG validated: $currentPKG $expectedMD5"
+                log_message "MD5 of PKG validated: $currentPKG $expectedMD5"
             fi
         fi
 
@@ -865,11 +864,11 @@ function process_pkgs(){
         pkgExitCode=$?
         # Verify the install completed successfully
         if [ $pkgExitCode != 0 ]; then
-            report_message "Package failed to complete: $currentPKG - Exit Code: $pkgExitCode"
+            report_message "Failed Item - Package installation error: $currentPKG - Exit Code: $pkgExitCode"
             dialog_command "listitem: title: $currentDisplayName, status: fail"
             failList+=("$currentDisplayName")
         else
-            report_message "Package completed successfully: $currentPKG"
+            report_message "Successful Item - Package: $currentPKG"
             dialog_command "listitem: title: $currentDisplayName, status: success"
             successList+=("$currentDisplayName")
         fi
@@ -1131,7 +1130,7 @@ function initiate_tracker_file(){
                 report_message "Invalid tracker file. Cannot not use tracker feature."
                 useTracker=false
             else
-                report_message "Valid tracker file found: $trackerFilePath"
+                report_message "Tracker file will be used: $trackerFilePath"
             fi
         # Else, create the file. If we can't create it, turn off useTracker
         else
