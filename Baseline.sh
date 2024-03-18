@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/zsh --no-rcs
 set -x
 #dryRun=true
 
@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="2.1beta1"
+scriptVersion="2.1"
 
 ########################################################################################################
 ########################################################################################################
