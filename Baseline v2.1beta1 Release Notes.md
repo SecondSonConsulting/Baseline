@@ -9,3 +9,4 @@
 - Moved Report file from `/usr/local/Baseline/Baseline-Report.txt` to `/var/log/Baseline-Report.txt`
 - Improved logging function and used standard language for logging item progress/details
 - Fixed a bug where Baseline would exit when run from Jamf due to Jamf default script
+- Added `--no-rcs` to the shebang for Baseline.sh, preinstall, and postinstall scripts
