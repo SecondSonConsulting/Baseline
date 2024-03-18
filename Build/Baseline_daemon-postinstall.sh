@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/zsh --no-rcs
 
 # Set variables for path/name
 launchDPath="/Library/LaunchDaemons"

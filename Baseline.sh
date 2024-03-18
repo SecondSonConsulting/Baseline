@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/zsh --no-rcs
 set -x
 #dryRun=true
 
@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="v.2.0"
+scriptVersion="2.1"
 
 ########################################################################################################
 ########################################################################################################
@@ -30,6 +30,7 @@ BaselineDir="/usr/local/Baseline"
 BaselineTempDir="$(mktemp -d /var/tmp/baselineTempDir.XXXXXXX)"
 customConfigPlist="$BaselineDir/BaselineConfig.plist"
 logFile="/var/log/Baseline.log"
+reportFile="/var/log/Baseline-Report.txt"
 BaselinePath="$BaselineDir/Baseline.sh"
 BaselineScripts="$BaselineDir/Scripts"
 BaselinePackages="$BaselineDir/Packages"
@@ -63,8 +64,7 @@ chmod -R 655 "${BaselineTempDir}"
 #   Logging and Housekeeping    #
 #################################
 
-function check_root()
-{
+function check_root(){
 
 # check we are running as root
 if [[ $(id -u) -ne 0 ]]; then
@@ -75,8 +75,7 @@ if [[ $(id -u) -ne 0 ]]; then
 fi
 }
 
-function make_directory()
-{
+function make_directory(){
     if [ ! -d "${1}" ]; then
         debug_message "Folder does not exist. Making it: ${1}"
         mkdir -p "${1}"
@@ -84,36 +83,37 @@ function make_directory()
 }
 
 #Used only for debugging. Gives feedback into standard out if verboseMode=1, also to $logFile if you set it
-function debug_message()
-{
+function debug_message(){
     if [ "$verboseMode" = 1 ]; then
     	/bin/echo "DEBUG: $*"
     fi
 }
 
 #Publish a message to the log (and also to the debug channel)
-function log_message()
-{
-    if [ -e "$logFile" ]; then
-    	/bin/echo "$(date): $*" >> "$logFile"
-    fi
+function log_message(){
+    echo "$(date): $*" | tee >( cat >> "$logFile" ) 
+    debug_message "$*"
+}
 
-    if [ "$verboseMode" = 1 ]; then
-    	debug_message "$*"
+function rotate_logs(){
+    touch "$logFile"
+    chmod 655 "$logFile"
+    if [ "$(wc -l < "$logFile" | xargs)" -ge 30000 ]; then
+        log_message "Rotating Logs"
+        mv "$logFile" "$logFile".old
+	    touch "$logFile"
+	    log_message "Logfile Rotated"
     fi
-
 }
 
 #Report messages go to our report, but also pass through log_message (and thus, also to debug_message)
-function report_message()
-{
+function report_message(){
     /bin/echo "$@" >> "$reportFile"
     log_message "$@"
 }
 
 # Initiate logging
-function initiate_logging()
-{
+function initiate_logging(){
 if ! touch "$logFile" ; then
     debug_message "ERROR: Logging fail. Cannot create log file"
     # Delete Baseline Temp Dir 
@@ -125,16 +125,13 @@ fi
 }
 
 #Only delete something if the variable has a value!
-function rm_if_exists()
-{
+function rm_if_exists(){
     if [ -n "${1}" ] && [ -e "${1}" ];then
         /bin/rm -rf "${1}"
     fi
 }
 
-function initiate_report()
-{
-    reportFile="/usr/local/Baseline/Baseline-Report.txt"
+function initiate_report(){
     if ! touch "$reportFile" ; then
         debug_message "ERROR: Reporting fail. Cannot create report file"
         # Delete Baseline Temp Dir 
@@ -147,8 +144,7 @@ function initiate_report()
 }
 
 #Define our script exit process. Usage: cleanup_and_exit 'exitcode' 'exit message'
-function cleanup_and_exit()
-{
+function cleanup_and_exit(){
     # Check if we are going to restart
     check_restart_option
 
@@ -185,8 +181,7 @@ function cleanup_and_exit()
 
 # This function doesn't always shut down, but I'm leaving the name in place for now at least.
 # Usage: cleanup_and_exit 'exitcode' 'exit message'
-function cleanup_and_restart()
-{
+function cleanup_and_restart(){
     # Check if we are going to restart
     check_restart_option
 
@@ -255,8 +250,7 @@ function cleanup_and_restart()
     shutdown -r now
 }
 
-function no_sleeping()
-{
+function no_sleeping(){
 
     /usr/bin/caffeinate -d -i -m -u &
     caffeinatepid=$!
@@ -272,8 +266,7 @@ function dialog_command(){
 #This function is modified from the awesome one given to us via Adam Codega. Thanks Adam!
 #https://github.com/acodega/dialog-scripts/blob/main/dialogCheckFunction.sh
 
-function install_dialog()
-{
+function install_dialog(){
 
     # Check for Dialog and install if not found. We'll try 10 times before exiting the script with a fail.
     dialogInstallAttempts=0
@@ -314,8 +307,7 @@ function install_dialog()
     done
 }
 
-function install_installomator()
-{
+function install_installomator(){
 
     # Check for Installomator and install if not found. We'll try 10 times before exiting the script with a fail.
     installomatorInstallAttempts=0
@@ -353,8 +345,7 @@ function install_installomator()
 }
 
 #Checks if a user is logged in yet, and if not it waits and loops until we can confirm there is a real user
-function wait_for_user()
-{
+function wait_for_user(){
     #Set our test to false
     verifiedUser="false"
 
@@ -381,22 +372,19 @@ function wait_for_user()
     debug_message "Disabling verbose output to prevent logspam while waiting for user at timestamp: $(date +%s)"
     set +x
     done
-    set -x
     debug_message "Re-enabling verbose output after finding user at timestamp: $(date +%s)"
 
 }
 
 #Check for custom config. We prioritize this even over a mobileconfig file.
-function check_for_custom_plist()
-{
+function check_for_custom_plist(){
     if [ -e $customConfigPlist ] && ! $configFromArgument; then
         BaselineConfig="$customConfigPlist"
     fi
 }
 
 #Verify configuration file
-function verify_configuration_file()
-{
+function verify_configuration_file(){
     #We need to make sure our configuration file is in place. By the time the user logs in, this should have happened.
     debug_message "Verifying configuration file. Failure here probably means an MDM profile hasn't been properly scoped, or there's a problem with the MDM delivering the profile."
     
@@ -428,8 +416,7 @@ function verify_configuration_file()
     fi
 }
 
-function build_installomator_array()
-{
+function build_installomator_array(){
     #Set an index internal to this function
     index=0
     #Loop through and test if there is a value in the slot of this index for the given array
@@ -444,8 +431,7 @@ function build_installomator_array()
     done
 }
 
-function process_installomator_labels()
-{
+function process_installomator_labels(){
     #Set an index internal to this function
     currentIndex=0
     #Loop through and test if there is a value in the slot of this index for the given array
@@ -492,14 +478,14 @@ function process_installomator_labels()
         $installomatorPath $currentLabel ${defaultInstallomatorOptions[@]} ${currentArgumentArray[@]} > /dev/null 2>&1
         installomatorExitCode=$?
         if [ $installomatorExitCode != 0 ]; then
-            report_message "Installomator failed to install: $currentLabel - Exit Code: $installomatorExitCode"
+            report_message "Failed Item - Installomator: $currentLabel - Exit Code: $installomatorExitCode"
             failList+=("$currentDisplayName")
             # If we're NOT using the integrated SwiftDialog, then
             if  [[ $useInstallomatorSwiftDialogIntegration != "true" ]]; then
                 dialog_command "listitem: title: $currentDisplayName, status: fail"
             fi
         else
-            report_message "Installomator successfully installed: $currentLabel"
+            report_message "Successful Item - Installomator: $currentLabel"
             successList+=("$currentDisplayName")
             if  [[ $useInstallomatorSwiftDialogIntegration != "true" ]]; then
                 dialog_command "listitem: title: $currentDisplayName, status: success"
@@ -515,8 +501,7 @@ function process_installomator_labels()
 }
 
 # Our main list builder for the Dialog window
-function build_dialog_array()
-{
+function build_dialog_array(){
     ## Usage: Build the dialog array for the given profile configuration key. $1 is the name of the key
     ## Example: build_dialog_array Scripts | InitialScripts | Packages | Installomator
 
@@ -538,20 +523,20 @@ function build_dialog_array()
 			currentIconPath=$($pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig")
 			# Check if Icon is remotely hosted URL
             if [[ ${currentIconPath:0:4} == "http" ]]; then
-                report_message "Icon set to URL: $currentIconPath"
+                log_message "Icon set to URL: $currentIconPath"
             # Check if Icon is an SF Symbol
 			elif [[ ${currentIconPath:0:3} == 'SF=' ]]; then
-                report_message "Icon set to SF Symbol: $currentIconPath"
+                log_message "Icon set to SF Symbol: $currentIconPath"
 			#Check of the given icon path exists on disk
 			elif [ -e "$currentIconPath" ]; then
-				report_message "Icon found: $currentIconPath"
+				log_message "Icon found: $currentIconPath"
 			elif [ -e "$BaselineTempIconsDir/$currentIconPath" ]; then
-				report_message "Icon found: $currentIconPath"
+				log_message "Icon found: $currentIconPath"
                 currentIconPath="$BaselineTempIconsDir/$currentIconPath"
                 chmod 655 "${currentIconPath}"
 			else
                 #If we can't find the local file, report and leave blank
-                report_message "ERROR: Icon key cannot be located: $currentIconPath"
+                log_message "ERROR: Icon key cannot be located: $currentIconPath"
                 currentIconPath=""
             fi
 		else
@@ -559,9 +544,17 @@ function build_dialog_array()
 			currentIconPath=""
 		fi
         
+		#Get the desired subtitle if populated in the configuration profile
+        if $pBuddy -c "Print :$configKey:${index}:Subtitle" "$BaselineConfig" > /dev/null 2>&1; then
+			currentSubtitle=$($pBuddy -c "Print :$configKey:${index}:Subtitle" "$BaselineConfig")
+		else
+			#If no icon key is set, ensure it's blank
+			currentSubtitle=""
+		fi
+        
         #Generate JSON entry for item
         #NOTE: We will strip out the final comma later to ensure a valid JSON
-        dialogListJson+="{\"title\" : \"$currentDisplayName\", \"icon\" : \"$currentIconPath\", \"status\" : \"\"},"
+        dialogListJson+="{\"title\" : \"$currentDisplayName\",\"subtitle\" : \"$currentSubtitle\", \"icon\" : \"$currentIconPath\", \"status\" : \"\"},"
 
         #Done looping. Increase our array value and loop again.
         index=$((index+1))
@@ -569,8 +562,7 @@ function build_dialog_array()
     done
 }
 
-function process_scripts()
-{
+function process_scripts(){
 # Usage: process_scripts ProfileKey
 # Actual use: process_scripts [ InitialScripts | Scripts ]
     #Set an index internal to this function
@@ -603,11 +595,11 @@ function process_scripts()
             #Check if curl exited cleanly
             if [ "$scriptDownloadExitCode" != 0 ];then
                 #Report a failed download
-                report_message "ERROR: Script failed to download. Check your URL: $currentScriptPath"
+                report_message "Failed Item - Script download error: $currentScriptPath"
                 #Rm the output of our curl command. This will result in it being processed as a failure
                 rm_if_exists "$currentScript"
             else
-                report_message "Script downloaded successfully: $currentScriptPath"
+                log_message "Script downloaded successfully: $currentScriptPath"
                 #Make our downloaded script executable
                 chmod +x "$currentScript"
             fi
@@ -620,7 +612,7 @@ function process_scripts()
         fi
         #If the currentScript variable still isn't set to an existing file we need to bail..
         if [ ! -e "$currentScript" ]; then
-            report_message "ERROR: Script does not exist: $currentScript"
+            report_message "Failed Item - Script does not exist: $currentScript"
             # Iterate the index up one
             currentIndex=$((currentIndex+1))
             increment_progress_bar
@@ -640,7 +632,7 @@ function process_scripts()
             actualMD5=$(md5 -q "$currentScript")
             #Evaluate whether the expected and actual MD5 do not match
             if [ "$actualMD5" != "$expectedMD5" ]; then
-                report_message "ERROR: MD5 value mismatch. Expected: $expectedMD5 Actual: $actualMD5"
+                report_message "Failed Item - Script MD5 error: $currentScriptPath - Expected $expectedMD5 - Actual $actualMD5"
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 # Only increment the progress bar if we're processing Scripts, not InitialScripts since users won't see those
@@ -682,11 +674,11 @@ function process_scripts()
         "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
         scriptExitCode=$?
         if [ $scriptExitCode != 0 ]; then
-            report_message "Script failed to complete: $currentScript - Exit Code: $scriptExitCode"
+            report_message "Failed Item - Script runtime error: $currentScript - Exit Code: $scriptExitCode"
             dialog_command "listitem: title: $currentDisplayName, status: fail"
             failList+=("$currentDisplayName")
         else
-            report_message "Script completed successfully: $currentScript"
+            report_message "Successful Item - Script: $currentScript"
             dialog_command "listitem: title: $currentDisplayName, status: success"
             successList+=("$currentDisplayName")
         fi
@@ -705,8 +697,7 @@ function process_scripts()
     done
 }
 
-function build_pkg_arrays()
-{
+function build_pkg_arrays(){
     #Set an index internal to this function
     index=0
     #Loop through and test if there is a value in the slot of this index for the given array
@@ -721,8 +712,7 @@ function build_pkg_arrays()
     done
 }
 
-function process_pkgs()
-{
+function process_pkgs(){
     #Set an index internal to this function
     currentIndex=0
     #Loop through and test if there is a value in the slot of this index for the given array
@@ -766,7 +756,7 @@ function process_pkgs()
             downloadResult=$?
             #Verify curl exited with 0
             if [ "$downloadResult" != 0 ]; then
-                report_message "ERROR: PKG failed to download: $currentPKGPath"
+                report_message "Failed Item - Package download error: $currentPKGPath"
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 increment_progress_bar
@@ -775,7 +765,7 @@ function process_pkgs()
                 # Bail this pass through the while loop and continue processing next item
                 continue
             else
-                debug_message "PKG downloaded successfully: $currentPKGPath downloaded to $currentPKG"
+                debug_message "PKG downloaded successfully: $currentPKGPath"
             fi
         fi
         
@@ -789,7 +779,7 @@ function process_pkgs()
             # The path to the PKG appears to exist within Baseline directory
             currentPKG="$BaselinePackages/$currentPKGPath"
         else
-            report_message "Package not found $currentPKGPath"
+            report_message "Failed Item - Package does not exist: $currentPKGPath"
             dialog_command "listitem: title: $currentDisplayName, status: fail"
             failList+=("$currentDisplayName")
             currentIndex=$((currentIndex+1))
@@ -839,7 +829,7 @@ function process_pkgs()
             actualTeamID=$(spctl -a -vv -t install "$currentPKG" 2>&1 | awk -F '(' '/origin=/ {print $2 }' | tr -d ')' )
             # Check if actual does not match expected
             if [ "$expectedTeamID" != "$actualTeamID" ]; then
-                report_message "TeamID validation of PKG failed: $currentPKG - Expected: $expectedTeamID Actual: $actualTeamID"
+                report_message "Failed Item - Package TeamID error: $currentPKG - Expected - $expectedTeamID Actual - $actualTeamID"
                 dialog_command "listitem: title: $currentDisplayName, status: fail"
                 failList+=("$currentDisplayName")
                 # Iterate the index up one
@@ -850,7 +840,7 @@ function process_pkgs()
                 # Bail this pass through the while loop and continue processing next item
                 continue
             else
-                report_message "TeamID of PKG validated: $currentPKG $expectedTeamID"
+                log_message "TeamID of PKG validated: $currentPKG $expectedTeamID"
             fi
         fi
         
@@ -860,7 +850,7 @@ function process_pkgs()
             actualMD5=$(md5 -q "$currentPKG")
             # Check if actual does not match expected
             if [ "$expectedMD5" != "$actualMD5" ]; then
-                report_message "MD5 validation of PKG failed: $currentPKG - Expected: $expectedMD5 Actual: $actualMD5"
+                report_message "Failed Item - Package MD5 error: $currentPKG - Expected - $expectedMD5 Actual - $actualMD5"
                 dialog_command "listitem: title: $currentDisplayName, status: fail"
                 failList+=("$currentDisplayName")
                 # Iterate the index up one
@@ -872,7 +862,7 @@ function process_pkgs()
                 # Bail this pass through the while loop and continue processing next item
                 continue
             else
-                report_message "MD5 of PKG validated: $currentPKG $expectedMD5"
+                log_message "MD5 of PKG validated: $currentPKG $expectedMD5"
             fi
         fi
 
@@ -882,11 +872,11 @@ function process_pkgs()
         pkgExitCode=$?
         # Verify the install completed successfully
         if [ $pkgExitCode != 0 ]; then
-            report_message "Package failed to complete: $currentPKG - Exit Code: $pkgExitCode"
+            report_message "Failed Item - Package installation error: $currentPKG - Exit Code: $pkgExitCode"
             dialog_command "listitem: title: $currentDisplayName, status: fail"
             failList+=("$currentDisplayName")
         else
-            report_message "Package completed successfully: $currentPKG"
+            report_message "Successful Item - Package: $currentPKG"
             dialog_command "listitem: title: $currentDisplayName, status: success"
             successList+=("$currentDisplayName")
         fi
@@ -908,8 +898,7 @@ function copy_icons_dir(){
     fi
 }
 
-function build_dialog_json_file()
-{
+function build_dialog_json_file(){
     # Initiate Json file
     /bin/echo "{\"listitem\" : [" >> $dialogJsonFile
     # For each item in our list, add the Json line
@@ -927,16 +916,14 @@ function build_dialog_json_file()
 
 }
 
-function build_dialog_list_options()
-{
+function build_dialog_list_options(){
     # This function populates an array with all of the items Baseline iterates through
     for i in $dialogList; do
         dialogListItems+=(--listitem $i)
     done
 }
 
-function check_exit_condition()
-{
+function check_exit_condition(){
     exitConditionPath=""
     # If `ExitCondition` key is passed in the configuration profile, then set a variable
     if $pBuddy -c "Print :ExitCondition" "$BaselineConfig" > /dev/null 2>&1; then
@@ -977,8 +964,7 @@ function check_for_bail_out(){
     fi    
 }
 
-function check_restart_option()
-{
+function check_restart_option(){
     restartSetting=$($pBuddy -c "Print :Restart" "$BaselineConfig" 2> /dev/null )
     logOutSetting=$($pBuddy -c "Print :LogOut" "$BaselineConfig" 2> /dev/null )
 
@@ -1041,8 +1027,7 @@ function check_restart_option()
 
 }
 
-function check_progress_options()
-{
+function check_progress_options(){
     # Set variable for whether or not we'll display a progress bar. Defaults to 'false'
     showProgressBarSetting=$($pBuddy -c "Print :ProgressBar" "$BaselineConfig" 2> /dev/null )
 
@@ -1062,8 +1047,7 @@ function check_progress_options()
     fi
 }
 
-function increment_progress_bar()
-{
+function increment_progress_bar(){
     # If we're not displaying the progress bar, skip
     if [ "$showProgressBar" != "true" ]; then
         return
@@ -1077,8 +1061,7 @@ function increment_progress_bar()
     dialog_command "progress: $progressBarPercentage"
 }
 
-function set_progressbar_text()
-{
+function set_progressbar_text(){
     # If we're not displaying the progress bar, skip
     if [ "$progressBarDisplayNames" != "true" ]; then
         return
@@ -1155,7 +1138,7 @@ function initiate_tracker_file(){
                 report_message "Invalid tracker file. Cannot not use tracker feature."
                 useTracker=false
             else
-                report_message "Valid tracker file found: $trackerFilePath"
+                report_message "Tracker file will be used: $trackerFilePath"
             fi
         # Else, create the file. If we can't create it, turn off useTracker
         else
@@ -1203,6 +1186,76 @@ function update_tracker(){
     fi
 }
 
+function check_silent_option(){
+    # If silentMode hasn't been set yet, check if its in our configuration file.
+    if [ -z "$silentModeEnabled" ]; then
+        # This will exit empty if the key does not exist.
+        silentModeEnabled=$($pBuddy -c "Print :SilentMode" "$BaselineConfig" 2> /dev/null )
+    fi
+
+    if [ -z $silentModeEnabled ]; then
+        log_message "No SilentMode key in configuration file"
+        silentModeEnabled="false"
+    elif [[ "$silentModeEnabled" == "true" ]]; then
+        log_message "SilentMode set to true"
+        silentModeEnabled=true
+    elif [[ "$silentModeEnabled" == "false" ]]; then
+        log_message "SilentMode set to false from configuration file"
+        silentModeEnabled="false"
+    else
+        log_message "Invalid value for SilentMode key. Setting to default. Invalid Key Value: $silentModeEnabled"
+        silentModeEnabled="false"
+    fi
+
+    configure_silent_mode
+}
+
+configure_silent_mode(){
+    # If silentMode is enabled, rewrite all functions which use SwiftDialog to `true`
+    # This effectively takes SwiftDialog entirely out of use.
+    if $silentModeEnabled; then
+        
+        dialogPath=true
+        dialogAppPath="/System/Applications"
+
+        function dialog_command(){
+            true
+        }
+
+        function install_dialog(){
+            true
+        }
+
+        function wait_for_user(){
+            true
+        }
+
+        function build_dialog_json_file(){
+            true
+        }
+
+        function build_dialog_list_options(){
+            true
+        }
+
+        function increment_progress_bar(){
+            true
+        }
+
+        function set_progressbar_text(){
+            true
+        }
+
+        function present_failure_window(){
+            true
+        }
+
+        function present_success_window(){
+            true
+        }
+
+    fi
+}
 
 ########################################################################################################
 ########################################################################################################
@@ -1242,7 +1295,6 @@ initiate_report
 #   Process Script Arguments    #
 #################################
 
-silentModeEnabled=false
 configFromArgument=false
 useTracker=false
 
@@ -1252,6 +1304,10 @@ fi
 
 while [ ! -z "$1" ]; do
     case $1 in; 
+        "/")
+            log_message "Shifting arguments for Jamf"
+            shift 2
+            ;;
         -c|--config|--configuration)
             shift
             if [ -e "$1" ] && $pBuddy -c "Print" "${1}" > /dev/null 2>&1; then
@@ -1268,6 +1324,7 @@ while [ ! -z "$1" ]; do
             fi
             ;;
         -s|--silent|--silent-mode)
+            log_message "Setting Silent Mode from Command-Line"
             silentModeEnabled=true
             ;;
         -t|--tracker)
@@ -1284,54 +1341,13 @@ done
 #   De-Configure Functions and Variables for Silent Mode   #
 ############################################################
 
-if $silentModeEnabled; then
-    
-    dialogPath=true
-    dialogAppPath="/System/Applications"
-
-    function dialog_command(){
-        true
-    }
-
-    function install_dialog(){
-        true
-    }
-
-    function wait_for_user(){
-        true
-    }
-
-    function build_dialog_json_file(){
-        true
-    }
-
-    function build_dialog_list_options(){
-        true
-    }
-
-    function increment_progress_bar(){
-        true
-    }
-
-    function set_progressbar_text(){
-        true
-    }
-
-    function present_failure_window(){
-        true
-    }
-
-    function present_success_window(){
-        true
-    }
-
-fi
 
 
 #############################################
 #   Verify a Configuration File is in Place #
 #############################################
 verify_configuration_file
+check_silent_option
 initiate_tracker_file
 
 #############################################
@@ -1500,8 +1516,7 @@ fi
 # I also don't know how to set the variable by passing the name of that variable as an argument to the function.
 # So I'll have to define this function several times.
 # I grow old … I grow old …I shall wear the bottoms of my trousers rolled..
-function configure_dialog_list_arguments()
-{
+function configure_dialog_list_arguments(){
     # $1 is the SwiftDialog option to change, $2 is the default value for that option if its not included in the profile
     if (($dialogListArguments[(Ie)$1])); then
         # $1 was included in the customization, so we report it and move along
@@ -1538,7 +1553,6 @@ if [ "$progressBarDisplayNames" = "true" ]; then
     configure_dialog_list_arguments "--progresstext" ' '
 fi
 
-
 #########################################
 #   Configure Success Customizations    #
 #########################################
@@ -1553,8 +1567,7 @@ if [ -n "$dialogSuccessArguments" ]; then
     eval 'for customization in '$dialogSuccessArguments'; do finalSuccessCommand+=$customization; done'
 fi
 
-function configure_dialog_success_arguments()
-{
+function configure_dialog_success_arguments(){
     # $1 is the SwiftDialog option to change, $2 is the default value for that option if its not included in the profile
     if (($dialogSuccessArguments[(Ie)$1])); then
         # $1 was included in the customization, so we report it and move along
@@ -1599,8 +1612,7 @@ if [ -n "$dialogFailureArguments" ]; then
     eval 'for customization in '$dialogFailureArguments'; do finalFailureCommand+=$customization; done'
 fi
 
-function configure_dialog_failure_arguments()
-{
+function configure_dialog_failure_arguments(){
     # $1 is the SwiftDialog option to change, $2 is the default value for that option if its not included in the profile
     if (($dialogFailureArguments[(Ie)$1])); then
         # $1 was included in the customization, so we report it and move along
