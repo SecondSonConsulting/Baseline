@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="2.2dev"
+scriptVersion="2.2jamfbet2"
 
 ########################################################################################################
 ########################################################################################################
@@ -49,6 +49,9 @@ installomatorPath="/usr/local/Installomator/Installomator.sh"
 dialogCommandFile=$(mktemp "${BaselineTempDir}/baselineDialog.XXXXXX")
 dialogJsonFile=$(mktemp "${BaselineTempDir}/baselineJson.XXXX")
 expectedDialogTeamID="PWA5E9TQ59"
+
+# Path to the Jamf log file
+jamfLogFile="/private/var/log/jamf.log"
 
 chmod -R 655 "${BaselineTempDir}"
 
@@ -572,6 +575,8 @@ function process_scripts(){
     while $pBuddy -c "Print :${1}:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
         check_for_bail_out
         #Unset variables for next loop
+        unset useVerboseJamf
+        unset jamfVerbosePID
         unset expectedMD5
         unset actualMD5
         unset currentArguments
@@ -622,6 +627,10 @@ function process_scripts(){
             update_tracker $currentDisplayName 99
             # Bail this pass through the while loop and continue processing next item
             continue
+        fi
+        #Check if this is a Jamf binary call and if we're using verbose jamf output
+        if [[ ${currentScriptPath} == "/usr/local/bin/jamf" ]] && $showVerboseJamf ; then
+            jamf_verbose_dialog "$currentDisplayName" & jamfVerbosePID=$!
         fi
         #Check for MD5 validation
         if $pBuddy -c "Print :${1}:${currentIndex}:MD5" "$BaselineConfig" > /dev/null 2>&1; then
@@ -690,9 +699,21 @@ function process_scripts(){
         # This gets set for use with the BailOut feature
         previousDisplayName="$currentDisplayName"
 
-        #Only increment the progress bar if we're processing Scripts, not InitialScripts since users won't see those
+        #Stuff in this section only happens if we're processing Scripts and not InitialScripts
         if [ "$1" = "Scripts" ]; then
             increment_progress_bar
+            #If we're using jamf, and jamf verbose is configured
+            if [[ ${currentScriptPath} == "/usr/local/bin/jamf" ]] && \
+                $showVerboseJamf; then
+                # Sleep for visual effects
+                sleep 3
+                # If the PID is still running, kill it
+                if ps -x "$jamfVerbosePID"  > /dev/null 2>&1; then
+                    kill "$jamfVerbosePID"
+                fi
+            # Now clear the jamf verbose status text
+            dialog_command "listitem: title: ${currentDisplayName}, statustext: "
+            fi
         fi
     done
 }
@@ -1210,7 +1231,7 @@ function check_silent_option(){
     configure_silent_mode
 }
 
-configure_silent_mode(){
+function configure_silent_mode(){
     # If silentMode is enabled, rewrite all functions which use SwiftDialog to `true`
     # This effectively takes SwiftDialog entirely out of use.
     if $silentModeEnabled; then
@@ -1255,6 +1276,53 @@ configure_silent_mode(){
         }
 
     fi
+}
+
+function jamf_verbose_dialog(){
+    # This function reads the jamf log output and updates the associated item in swiftDialog with verbose details like Installomator uses
+    # $1 is the DisplayName of the item we want to update
+    # Tail the Jamf log file
+    tail -Fn0 "$jamfLogFile" | while read line ; do
+        # Check for "Executing" status
+        if echo "$line" | grep -qi "executing"; then
+            dialog_command "listitem: title: ${1}, statustext: Executing..."
+        fi
+
+        # Check for "Verifying" status
+        if echo "$line" | grep -qi "verifying"; then
+            dialog_command "listitem: title: ${1}, statustext: Verifying..."
+        fi
+
+        # Check for "Installing" status
+        if echo "$line" | grep -qi "installing"; then
+            dialog_command "listitem: title: ${1}, statustext: Installing..."
+        fi
+
+        # Check for "Successfully installed" status
+        if echo "$line" | grep -qi "successfully installed"; then
+            dialog_command "listitem: title: ${1}, statustext: Installation Finished"
+            break # Exit after successful installation
+        fi
+
+        # Check for "Failed" status
+        if echo "$line" | grep -qi "failed"; then
+            dialog_command "listitem: title: ${1}, statustext: Installation Failed"
+            break # Exit on failure
+        fi
+    done
+
+}
+
+function check_jamf_verbose_option(){
+    # Set variable for whether or not we'll use Jamf Verbosle Options. Defaults to 'false'
+    showVerboseJamfSetting=$($pBuddy -c "Print :JamfVerbose" "$BaselineConfig" 2> /dev/null )
+
+    if  [[ $showVerboseJamfSetting == "true" ]]; then
+        showVerboseJamf="true"
+    else
+        showVerboseJamf="false"
+    fi
+    showVerboseJamf=true
 }
 
 ########################################################################################################
