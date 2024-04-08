@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="2.2jamfbet2"
+scriptVersion="2.2jamfbet3"
 
 ########################################################################################################
 ########################################################################################################
@@ -1285,17 +1285,17 @@ function jamf_verbose_dialog(){
     tail -Fn0 "$jamfLogFile" | while read line ; do
         # Check for "Executing" status
         if echo "$line" | grep -qi "executing"; then
-            dialog_command "listitem: title: ${1}, statustext: Executing..."
+            dialog_command "listitem: title: ${1}, statustext: Executing..., progress: 25"
         fi
 
         # Check for "Verifying" status
         if echo "$line" | grep -qi "verifying"; then
-            dialog_command "listitem: title: ${1}, statustext: Verifying..."
+            dialog_command "listitem: title: ${1}, statustext: Verifying..., progress: 50"
         fi
 
         # Check for "Installing" status
         if echo "$line" | grep -qi "installing"; then
-            dialog_command "listitem: title: ${1}, statustext: Installing..."
+            dialog_command "listitem: title: ${1}, statustext: Installing..., progress: 75"
         fi
 
         # Check for "Successfully installed" status
@@ -1310,6 +1310,7 @@ function jamf_verbose_dialog(){
             break # Exit on failure
         fi
     done
+    sleep 1
 
 }
 
