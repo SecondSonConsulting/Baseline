@@ -718,21 +718,6 @@ function process_scripts(){
     done
 }
 
-function build_pkg_arrays(){
-    #Set an index internal to this function
-    index=0
-    #Loop through and test if there is a value in the slot of this index for the given array
-    #If this command fails it means we've reached the end of the array in the config file and we exit our loop
-
-    while $pBuddy -c "Print :Packages:${index}" "$BaselineConfig" > /dev/null 2>&1; do
-        #Get the Display Name of the current item
-        currentDisplayName=$($pBuddy -c "Print :Packages:${index}:DisplayName" "$BaselineConfig")
-        dialogList+="$currentDisplayName"
-        #Done looping. Increase our array value and loop again.
-        index=$((index+1))
-    done
-}
-
 function process_pkgs(){
     #Set an index internal to this function
     currentIndex=0
