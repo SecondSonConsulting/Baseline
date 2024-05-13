@@ -704,16 +704,13 @@ function process_scripts(){
         if [ "$1" = "Scripts" ]; then
             increment_progress_bar
             #If we're using jamf, and jamf verbose is configured
-            if [[ ${currentScriptPath} == "/usr/local/bin/jamf" ]] && \
-                $showVerboseJamf; then
-                # Sleep for visual effects
-                sleep 3
+            if [[ ${currentScriptPath} == "/usr/local/bin/jamf" ]] && $showVerboseJamf; then
                 # If the PID is still running, kill it
                 if ps -x "$jamfVerbosePID"  > /dev/null 2>&1; then
                     kill "$jamfVerbosePID"
                 fi
-            # Now clear the jamf verbose status text
-            dialog_command "listitem: title: ${currentDisplayName}, statustext: "
+                # Now clear the jamf verbose status text
+                dialog_command "listitem: title: ${currentDisplayName}, statustext: "
             fi
         fi
     done
