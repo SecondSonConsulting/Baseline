@@ -10,7 +10,7 @@
                     "DisplayName": {
                         "type": "string",
                         "title": "Display Name",
-                        "description": "The name you want to appear in the SwiftDialog menu as this script is run."
+                        "description": "The name you want to appear SwiftDialog and logs. Initial Scripts will only be shown to the user if the item Fails."
                     },
                     "ScriptPath": {
                         "type": "string",
@@ -30,7 +30,7 @@
                 }
             },
             "title": "InitialScripts",
-            "description": "Define scripts that are run immediately as the user logs in.",
+            "description": "Define scripts that are run immediately as the user logs in, prior to any Baseline SwiftDialog windows. These scripts are the place to add your custom welcome messages or pre-flight scripts.",
             "property_order": 5
         },
         "Installomator": {
@@ -66,7 +66,7 @@
                 }
             },
             "title": "Installomator Labels",
-            "description": "Define Installomator labels to be run by Baseline.",
+            "description": "Define Installomator labels to be run by Baseline. For information specific to Installomator, see the Installomator Github: https://github.com/Installomator/Installomator",
             "property_order": 10
         },
         "Packages": {
@@ -156,104 +156,148 @@
             "description": "Define Scripts to be run by Baseline",
             "property_order": 20
         },
+        "WaitFor": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "DisplayName": {
+                        "type": "string",
+                        "title": "Display Name",
+                        "description": "The name you want to appear in the SwiftDialog menu for this item we are waiting for."
+                    },
+                    "Path": {
+                        "type": "string",
+                        "title": "Path",
+                        "description": "A path to the file you want Baseline to wait for."
+                    },
+                    "Icon": {
+                        "type": "string",
+                        "title": "Icon",
+                        "description": "The icon you want to appear in the SwiftDialog menu for this item. Can be a URL or local file path."
+                    },
+                    "Subtitle": {
+                        "type": "string",
+                        "title": "Subtitle",
+                        "description": "The subtitle text to appear on this line item."
+                    }
+                }
+            },
+            "title": "WaitFor",
+            "description": "Define files which you want Baseline to wait for. Use this for items not directly installed by Baseline, like VPP or MDM installed apps.",
+            "property_order": 25
+        },
+        "WaitForTimeout": {
+            "type": "integer",
+            "title": "WaitFor Timeout",
+            "description": "When using WaitFor, enter the number of seconds you wish to wait before Baseline considers remaining items a failure. This timer does not start until all other items are processed. Default 300.",
+            "property_order": 30
+        },
         "Restart": {
             "type": "boolean",
             "title": "Force Restart",
             "default": true,
             "description": "This setting controls whether Baseline forces a restart after completion.",
-            "property_order": 25
+            "property_order": 35
         },
         "LogOut": {
             "type": "boolean",
             "title": "Force Log Out",
             "default": false,
             "description": "This setting controls whether Baseline forces a restart after completion.",
-            "property_order": 30
+            "property_order": 40
         },
         "BlurScreen": {
             "type": "boolean",
             "title": "Blur Screen",
             "default": true,
             "description": "This setting controls whether Baseline uses the SwiftDialog --blurscreen feature. Default is true. If you set to false, consider using --ontop in your DialogListOptions key",
-            "property_order": 35
+            "property_order": 45
         },
         "ProgressBar": {
             "type": "boolean",
             "title": "Show Progress Bar",
             "default": false,
             "description": "This setting controls whether Baseline displays a progress bar.",
-            "property_order": 40
+            "property_order": 50
         },
         "ProgressBarDisplayNames": {
             "type": "boolean",
             "title": "Show Display Names on Progress Bar",
             "default": false,
             "description": "This setting controls whether Baseline displays the current item being processed under the progress bar.",
-            "property_order": 45
+            "property_order": 55
         },
         "CleanupAfterUse": {
             "type": "boolean",
             "title": "Cleanup After Use",
             "default": true,
             "description": "This setting controls whether Baseline deletes it's install directory after use: /usr/local/Baseline.",
-            "property_order": 50
+            "property_order": 60
         },
         "ReinstallDialog": {
             "type": "boolean",
             "title": "Reinstall SwiftDialog",
-            "description": "This setting controls whether Baseline will reinstall SwiftDialog as the final step before completion. Default behavior if this key is omitted will reinstall SwiftDialog if a custom PNG is found in /Library/Application Support/Dialog/Dialog.png.",
-            "property_order": 55
+            "description": "This setting controls whether Baseline will reinstall SwiftDialog as the final step before completion. Default behavior if this key is omitted will reinstall SwiftDialog if a custom PNG is found in /Library/Application Support/Dialog/Dialog.png. Leave this as default if you use Baseline to deploy a custom SwiftDialog icon. Set to false if you do not want Baseline to ever reinstall SwiftDialog. Set to True if you always want to reinstall SwiftDialog after each Baseline.",
+            "property_order": 65
         },
         "InstallomatorSwiftDialogIntegration": {
             "type": "boolean",
             "title": "Use Installomator SwiftDialog Integration",
             "default": false,
             "description": "Tell Installomator to use it's built in SwiftDialog integration for the List View.",
-            "property_order": 60
+            "property_order": 70
         },
         "IgnoreDefaultInstallomatorOptions": {
             "type": "boolean",
             "title": "Ignore Default Installomator Options",
             "default": false,
             "description": "By default, Baseline uses \"NOTIFY=silent\" and \"BLOCKING_PROCESS_ACTION=kill\" Installomator options. Setting this to True means Baseline will not use those options.",
-            "property_order": 65
+            "property_order": 75
         },
         "Button1Enabled": {
             "type": "boolean",
             "title": "Button 1 Enabled",
             "default": false,
             "description": "This setting enables SwiftDialog \"Button 1\" (the OK button) on the Baseline List View. This allows users to dismiss the list view and continue working while Baseline runs. By default this button is disabled.",
-            "property_order": 70
+            "property_order": 80
+        },
+        "JamfVerbose": {
+            "type": "boolean",
+            "title": "Verbose Jamf Items",
+            "default": false,
+            "description": "If set to true, when a Script is processing a jamf policy (/usr/local/bin/jamf), Baseline will watch the Jamf log to provide more verbose output on that line item. Similar to the Installomator integration, text and a progress circle will be used for all jamf items. ",
+            "property_order": 85
         },
         "DialogListOptions": {
             "type": "string",
             "title": "Dialog List Window Options",
             "description": "SwiftDialog options for the primary Baseline progress list window.",
-            "property_order": 75
+            "property_order": 90
         },
         "DialogSuccessOptions": {
             "type": "string",
             "title": "Dialog Success Window Options",
             "description": "SwiftDialog options for the Success Dialog window.",
-            "property_order": 80
+            "property_order": 95
         },
         "DialogFailureOptions": {
             "type": "string",
             "title": "Dialog Failure Window Options",
             "description": "SwiftDialog options for the Failure Dialog window.",
-            "property_order": 85
+            "property_order": 100
         },
         "ExitCondition": {
             "type": "string",
             "title": "Exit Condition",
-            "description": "Define a file or folder path. If this file or folder exists, Baseline will exit quietly without processing any items.",
-            "property_order": 90
+            "description": "Define a file or folder path. When Baseline starts, if this file or folder exists, Baseline will exit quietly without processing any items. Use this option if your management tool may re-send scripts when not desired.",
+            "property_order": 105
         },
         "BailOutFile": {
             "type": "string",
             "title": "Bail Out File",
             "description": "Define a file path. If this file exists at any point while Baseline is running, Baseline will exit and will not process additional items.",
-            "property_order": 95
+            "property_order": 110
         }
     }
 }

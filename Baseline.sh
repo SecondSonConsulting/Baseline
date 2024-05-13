@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="2.1"
+scriptVersion="2.2"
 
 ########################################################################################################
 ########################################################################################################
@@ -49,6 +49,10 @@ installomatorPath="/usr/local/Installomator/Installomator.sh"
 dialogCommandFile=$(mktemp "${BaselineTempDir}/baselineDialog.XXXXXX")
 dialogJsonFile=$(mktemp "${BaselineTempDir}/baselineJson.XXXX")
 expectedDialogTeamID="PWA5E9TQ59"
+defaultWaitForTimeout=300
+
+# Path to the Jamf log file
+jamfLogFile="/private/var/log/jamf.log"
 
 chmod -R 655 "${BaselineTempDir}"
 
@@ -572,6 +576,8 @@ function process_scripts(){
     while $pBuddy -c "Print :${1}:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
         check_for_bail_out
         #Unset variables for next loop
+        unset useVerboseJamf
+        unset jamfVerbosePID
         unset expectedMD5
         unset actualMD5
         unset currentArguments
@@ -622,6 +628,10 @@ function process_scripts(){
             update_tracker $currentDisplayName 99
             # Bail this pass through the while loop and continue processing next item
             continue
+        fi
+        #Check if this is a Jamf binary call and if we're using verbose jamf output
+        if [[ ${currentScriptPath} == "/usr/local/bin/jamf" ]] && $showVerboseJamf ; then
+            jamf_verbose_dialog "$currentDisplayName" & jamfVerbosePID=$!
         fi
         #Check for MD5 validation
         if $pBuddy -c "Print :${1}:${currentIndex}:MD5" "$BaselineConfig" > /dev/null 2>&1; then
@@ -690,25 +700,19 @@ function process_scripts(){
         # This gets set for use with the BailOut feature
         previousDisplayName="$currentDisplayName"
 
-        #Only increment the progress bar if we're processing Scripts, not InitialScripts since users won't see those
+        #Stuff in this section only happens if we're processing Scripts and not InitialScripts
         if [ "$1" = "Scripts" ]; then
             increment_progress_bar
+            #If we're using jamf, and jamf verbose is configured
+            if [[ ${currentScriptPath} == "/usr/local/bin/jamf" ]] && $showVerboseJamf; then
+                # If the PID is still running, kill it
+                if ps -x "$jamfVerbosePID"  > /dev/null 2>&1; then
+                    kill "$jamfVerbosePID"
+                fi
+                # Now clear the jamf verbose status text
+                dialog_command "listitem: title: ${currentDisplayName}, statustext: "
+            fi
         fi
-    done
-}
-
-function build_pkg_arrays(){
-    #Set an index internal to this function
-    index=0
-    #Loop through and test if there is a value in the slot of this index for the given array
-    #If this command fails it means we've reached the end of the array in the config file and we exit our loop
-
-    while $pBuddy -c "Print :Packages:${index}" "$BaselineConfig" > /dev/null 2>&1; do
-        #Get the Display Name of the current item
-        currentDisplayName=$($pBuddy -c "Print :Packages:${index}:DisplayName" "$BaselineConfig")
-        dialogList+="$currentDisplayName"
-        #Done looping. Increase our array value and loop again.
-        index=$((index+1))
     done
 }
 
@@ -1210,7 +1214,7 @@ function check_silent_option(){
     configure_silent_mode
 }
 
-configure_silent_mode(){
+function configure_silent_mode(){
     # If silentMode is enabled, rewrite all functions which use SwiftDialog to `true`
     # This effectively takes SwiftDialog entirely out of use.
     if $silentModeEnabled; then
@@ -1255,6 +1259,144 @@ configure_silent_mode(){
         }
 
     fi
+}
+
+function jamf_verbose_dialog(){
+    # This function reads the jamf log output and updates the associated item in swiftDialog with verbose details like Installomator uses
+    # $1 is the DisplayName of the item we want to update
+    # Tail the Jamf log file
+    tail -Fn0 "$jamfLogFile" | while read line ; do
+        # Check for "Executing" status
+        if echo "$line" | grep -qi "executing"; then
+            dialog_command "listitem: title: ${1}, statustext: Executing..., progress: 25"
+        fi
+
+        # Check for "Verifying" status
+        if echo "$line" | grep -qi "verifying"; then
+            dialog_command "listitem: title: ${1}, statustext: Verifying..., progress: 50"
+        fi
+
+        # Check for "Installing" status
+        if echo "$line" | grep -qi "installing"; then
+            dialog_command "listitem: title: ${1}, statustext: Installing..., progress: 75"
+        fi
+
+        # Check for "Successfully installed" status
+        if echo "$line" | grep -qi "successfully installed"; then
+            dialog_command "listitem: title: ${1}, statustext: Installation Finished"
+            break # Exit after successful installation
+        fi
+
+        # Check for "Failed" status
+        if echo "$line" | grep -qi "failed"; then
+            dialog_command "listitem: title: ${1}, statustext: Installation Failed"
+            break # Exit on failure
+        fi
+    done
+    sleep 1
+
+}
+
+function check_jamf_verbose_option(){
+    # Set variable for whether or not we'll use Jamf Verbosle Options. Defaults to 'false'
+    showVerboseJamfSetting=$($pBuddy -c "Print :JamfVerbose" "$BaselineConfig" 2> /dev/null )
+
+    if  [[ $showVerboseJamfSetting == "true" ]]; then
+        showVerboseJamf="true"
+    else
+        showVerboseJamf="false"
+    fi
+
+}
+
+function process_wait_for_items(){
+    # See if any `WaitFor` items are in our config, if not end this function
+    if ! $pBuddy -c "Print :WaitFor:0" "$BaselineConfig" > /dev/null 2>&1; then
+        debug_message "No WaitFor items found"
+        return 0
+    else
+        debug_message "WaitFor values found. Initiating WaitFor"
+    fi
+    
+    # Clear any text off the progress bar
+    set_progressbar_text " "
+
+    # Check for a custom "WaitForTimeout" value
+    waitForTimeoutSetting=$($pBuddy -c "Print :WaitForTimeout" "$BaselineConfig" 2> /dev/null )
+
+    # If the "WaitForTimeout" value is an integer, set our timeout to that. Otherwise, set to default.
+    if [[ "${waitForTimeoutSetting}" =~ '^[0-9]+$' ]] ; then
+        waitForTimeout="${waitForTimeoutSetting}"
+    else
+        waitForTimeout="${defaultWaitForTimeout}"    
+    fi
+
+    # Initiate empty arrays
+    waitForPaths=()
+    waitForDisplayNames=()
+
+    # This is our index as we build our arrays
+    waitCount=0
+
+    # Put all Paths/DisplayNames into our arrays
+    while "$pBuddy" -c "Print WaitFor:${waitCount}:Path" "$BaselineConfig" > /dev/null 2>&1; do
+        waitForPaths+=$("$pBuddy" -c "Print WaitFor:${waitCount}:Path" "$BaselineConfig")
+        waitForDisplayNames+=$("$pBuddy" -c "Print WaitFor:${waitCount}:DisplayName" "$BaselineConfig")
+        waitCount=$(( waitCount + 1 ))
+    done
+
+    # Put all of our WaitFor items into spinny wait mode
+    for waitForDisplayName in "${waitForDisplayNames[@]}"; do
+        dialog_command "listitem: title: $waitForDisplayName, status: wait"
+    done
+
+    # Set the time at which we'll stop waiting for items by getting the date now and adding the seconds for our deadline
+    waitForDateNow=$(date +%s)
+    waitForDeadline=$(( waitForDateNow + waitForTimeout ))
+
+    # While we still have paths we're waiting for AND we haven't past our deadline
+    while [ -n "$waitForPaths" ] && [[ $(date +%s) -lt $waitForDeadline ]]; do
+        # Check for each path in our Paths array, and see if it exists yet
+        for waitPath in "${waitForPaths[@]}"; do
+            # If our item exists
+            if [ -e "$waitPath" ]; then
+                debug_message "$waitPath exists"
+                # Find what index in our array the current item belongs to
+                indexItemToRemove="${waitForPaths[(Ie)${waitPath}]}"
+                # As long as that index is not zero
+                if [ "$indexItemToRemove" != 0 ]; then
+                    # Remove the Path and the DisplayName from the list of items we're waiting to complete
+                    debug_message "Removing from waitForPaths: $waitForPaths[${indexItemToRemove}] index: ${indexItemToRemove}"
+                    debug_message "Removing from waitForDisplayNames: $waitForDisplayNames[${indexItemToRemove}] index: ${indexItemToRemove}"
+                    # Mark the item as complete
+                    dialog_command "listitem: title: $waitForDisplayNames[$indexItemToRemove], status: success"
+                    report_message "Successful Item - WaitFor: $waitForDisplayNames[$indexItemToRemove]"
+                    successList+=("$waitForDisplayNames[$indexItemToRemove]")
+                    increment_progress_bar
+                    sleep 1
+                    waitForPaths[${indexItemToRemove}]=()
+                    waitForDisplayNames[${indexItemToRemove}]=()
+                fi
+            fi
+        done
+        # Sleep 2 seconds between checking for all items
+        sleep 2
+    done
+
+    # If we've gotten here, we're either done with all WaitFor items or we've timed out
+    # If we still have WaitFor items, then we need to mark them as failures.
+    if [ -n "$waitForDisplayNames" ]; then
+        debug_message "Failed WaitFor Paths: ${waitForPaths[@]}"
+        for failedWaitDisplayName in "${waitForDisplayNames[@]}"; do
+            report_message "Failed Item - WaitFor: $failedWaitDisplayName"
+            failList+=("$failedWaitDisplayName")
+            dialog_command "listitem: title: $failedWaitDisplayName, status: fail"
+            increment_progress_bar
+        done
+    else
+        report_message "WaitFor - All items successful"
+    fi
+
 }
 
 ########################################################################################################
@@ -1649,6 +1791,7 @@ fi
 build_dialog_array Installomator
 build_dialog_array Packages
 build_dialog_array Scripts
+build_dialog_array WaitFor
 build_dialog_json_file
 build_dialog_list_options
 
@@ -1690,6 +1833,8 @@ process_installomator_labels
 process_pkgs
 
 process_scripts Scripts
+
+process_wait_for_items
 
 #Check if we have a custom Dialog.app icon waiting to process. If yes, reinstall dialog (unless config says to skip it)
 forceDialogReinstallSetting=$($pBuddy -c "Print ReinstallDialog" "$BaselineConfig" 2> /dev/null)
