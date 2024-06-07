@@ -576,6 +576,7 @@ function process_scripts(){
     while $pBuddy -c "Print :${1}:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
         check_for_bail_out
         #Unset variables for next loop
+        unset asUser
         unset useVerboseJamf
         unset jamfVerbosePID
         unset expectedMD5
@@ -590,6 +591,8 @@ function process_scripts(){
         currentDisplayName=$($pBuddy -c "Print :${1}:${currentIndex}:DisplayName" "$BaselineConfig")
         #Set the current script name
         currentScriptPath=$($pBuddy -c "Print :${1}:${currentIndex}:ScriptPath" "$BaselineConfig")
+        #Set where we are running in the user context or root
+        asUser=$($pBuddy -c "Print :${1}:${currentIndex}:AsUser" "$BaselineConfig" )
         #Check if the defined script is a remote path
         if [[ ${currentScriptPath:0:4} == "http" ]]; then
             #Set variable to the base file name to be downloaded
@@ -681,7 +684,11 @@ function process_scripts(){
         fi
 
         #Call our script with our desired options. Default options first, so that they can be overriden by "currentArguments"
-        "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
+        if [[ $asUser == "true" ]]; then
+            as_user "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
+        else
+            "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
+        fi
         scriptExitCode=$?
         if [ $scriptExitCode != 0 ]; then
             report_message "Failed Item - Script runtime error: $currentScript - Exit Code: $scriptExitCode"
@@ -893,6 +900,11 @@ function process_pkgs(){
         previousDisplayName="$currentDisplayName"
         check_for_bail_out
     done
+}
+
+function as_user() {
+    # This function will run the passed arguments in the user context
+    /bin/launchctl asuser "${currentUserUID}" sudo -u "${currentUser}" "$@"
 }
 
 function copy_icons_dir(){
