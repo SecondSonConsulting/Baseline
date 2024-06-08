@@ -685,7 +685,7 @@ function process_scripts(){
 
         #Call our script with our desired options. Default options first, so that they can be overriden by "currentArguments"
         if [[ $asUser == "true" ]]; then
-            as_user "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
+            /bin/launchctl asuser "$currentUserUID" sudo -u "$currentUser" "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
         else
             "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
         fi
@@ -900,11 +900,6 @@ function process_pkgs(){
         previousDisplayName="$currentDisplayName"
         check_for_bail_out
     done
-}
-
-function as_user() {
-    # This function will run the passed arguments in the user context
-    /bin/launchctl asuser "${currentUserUID}" sudo -u "${currentUser}" "$@"
 }
 
 function copy_icons_dir(){
