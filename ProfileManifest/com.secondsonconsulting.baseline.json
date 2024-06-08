@@ -140,6 +140,11 @@
                         "title": "Arguments",
                         "description": "Arguments you want to pass to the script when it is run."
                     },
+                    "AsUser": {
+                        "type": "boolean",
+                        "title": "As User",
+                        "description": "Run script in the user context."
+                    },
                     "Icon": {
                         "type": "string",
                         "title": "Icon",
