@@ -1198,7 +1198,7 @@ function check_runmode_option(){
 
 }
 
-function initiate_runmode(){
+function check_runmode_setting(){
     # Check for invalid configuration (both silent and loginwindow set true)
     if [ "$silentModeEnabled" = "true" ] && [ "$loginWindowModeEnabled" = "true" ]; then
         cleanup_and_exit 1 "**WARNING** Invalid configuration: SilentMode and LoginWindowMode keys cannot both be set to true."
@@ -1267,11 +1267,12 @@ function initiate_runmode(){
                 else
                     log_message "Loginwindow user detected."
                     verifiedUser="true"
+                    loginWindowMode="true"
                 fi
             debug_message "Disabling verbose output to prevent logspam while waiting for user at timestamp: $(date +%s)"
             set +x
             done
-            debug_message "Re-enabling verbose output after finding user at timestamp: $(date +%s)"
+            debug_message "Re-enabling verbose output after finding loginwindow user at timestamp: $(date +%s)"
         }
     else
         # Default behavior. Checks if a user is logged in yet, and if not it waits and loops until we can confirm there is a real user
@@ -1538,7 +1539,7 @@ done
 #   Verify a Configuration File is in Place #
 #############################################
 verify_configuration_file
-check_silent_option
+check_runmode_setting
 initiate_tracker_file
 
 #############################################
@@ -1619,6 +1620,7 @@ progressBarTotal=0
 # Initiate bools
 showProgressBar="false"
 progressBarDisplayNames="false"
+loginWindowMode="false"
 
 ##############################
 #   Process Initial Scripts  #
