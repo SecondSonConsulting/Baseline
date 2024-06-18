@@ -214,6 +214,13 @@
             "description": "This setting controls whether Baseline uses the SwiftDialog --blurscreen feature. Default is true. If you set to false, consider using --ontop in your DialogListOptions key",
             "property_order": 45
         },
+        "ShowAtLoginWindow": {
+            "type": "boolean",
+            "title": "Show At Loginwindow",
+            "default": false,
+            "description": "This setting controls whether Baseline uses the SwiftDialog --loginwindow feature. Default is false.",
+            "property_order": 47
+        },
         "ProgressBar": {
             "type": "boolean",
             "title": "Show Progress Bar",
