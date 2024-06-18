@@ -1196,9 +1196,10 @@ function check_runmode_option(){
         loginWindowModeEnabled="false"
     fi
 
+    configure_runmode_setting
 }
 
-function check_runmode_setting(){
+function configure_runmode_setting(){
     # Check for invalid configuration (both silent and loginwindow set true)
     if [ "$silentModeEnabled" = "true" ] && [ "$loginWindowModeEnabled" = "true" ]; then
         cleanup_and_exit 1 "**WARNING** Invalid configuration: SilentMode and LoginWindowMode keys cannot both be set to true."
@@ -1530,7 +1531,7 @@ while [ ! -z "$1" ]; do
 done
 
 ############################################################
-#   De-Configure Functions and Variables for Silent Mode   #
+#   De-Configure Functions and Variables for Silent Mode  #
 ############################################################
 
 
@@ -1539,7 +1540,7 @@ done
 #   Verify a Configuration File is in Place #
 #############################################
 verify_configuration_file
-check_runmode_setting
+check_runmode_option
 initiate_tracker_file
 
 #############################################
