@@ -348,48 +348,55 @@ function install_installomator(){
     done
 }
 
-#Checks if a user is logged in yet, and if not it waits and loops until we can confirm there is a real user
-function wait_for_user(){
-    #Set our test to false
-    verifiedUser="false"
+# Set ShowAtLoginWindow bool
+function check_run_at_loginwindow(){
     showAtLoginWindowSetting=$($pBuddy -c "Print ShowAtLoginWindow" "$BaselineConfig")
-    #Loop until user is found
-    while [ "$verifiedUser" = "false" ]; do
-        #Get currently logged in user
-        currentUser=$( echo "show State:/Users/ConsoleUser" | scutil | awk '/Name :/ { print $3 }' )
-        if [ "$showAtLoginWindowSetting" = "true" ]; then
-            if [ "$currentUser" = "root" ] \
-                || [ "$currentUser" = "_mbsetupuser" ] \
-                || [ -z "$currentUser" ]
-            then
-            sleep 1
-            elif [ "$currentUser" = "loginwindow" ]; then
-                log_message "Baseline has been set to run at login window."
-                verifiedUser="true"
-                showAtLoginWindow="true"
-            fi
-        else      #Verify the current user is not root, loginwindow, or _mbsetupuser
-            if [ "$currentUser" = "root" ] \
-                || [ "$currentUser" = "loginwindow" ] \
-                || [ "$currentUser" = "_mbsetupuser" ] \
-                || [ -z "$currentUser" ]
-            then
-            #If we aren't verified yet, wait 1 second and try again
-            sleep 1
-            else
-                #Logged in user found, but continue the loop until Dock and Finder processes are running
-                if pgrep -q "dock" && pgrep -q "Finder"; then
-                    uid=$(id -u "$currentUser")
-                    log_message "Verified User is logged in: $currentUser UID: $uid"
-                    verifiedUser="true"
+    if [ "$showAtLoginWindowSetting" = "true" ]; then
+        showAtLoginWindow="true"
+    else
+        showAtLoginWindow="false"
+    fi
+}
+
+# Checks run at loginwindow setting, or
+# checks if a user is logged in yet, and
+# if not it waits and loops until we can confirm there is a real user
+function loginwindow_action(){
+    # default loginwindow setting to false, change if true
+    showAtLoginWindow="false"
+    check_run_at_loginwindow
+    case "$showAtLoginWindow" in
+    "true")
+    debug_message "Baseline has been set to run at loginwindow, skip verified user check.";;
+    "false" | *)
+        #Set our test to false
+        verifiedUser="false"
+        #Loop until user is found
+        while [ "$verifiedUser" = "false" ]; do
+            #Get currently logged in user
+            currentUser=$( echo "show State:/Users/ConsoleUser" | scutil | awk '/Name :/ { print $3 }' )
+            else      #Verify the current user is not root, loginwindow, or _mbsetupuser
+                if [ "$currentUser" = "root" ] \
+                    || [ "$currentUser" = "loginwindow" ] \
+                    || [ "$currentUser" = "_mbsetupuser" ] \
+                    || [ -z "$currentUser" ]
+                then
+                #If we aren't verified yet, wait 1 second and try again
+                sleep 1
+                else
+                    #Logged in user found, but continue the loop until Dock and Finder processes are running
+                    if pgrep -q "dock" && pgrep -q "Finder"; then
+                        uid=$(id -u "$currentUser")
+                        log_message "Verified User is logged in: $currentUser UID: $uid"
+                        verifiedUser="true"
+                    fi
                 fi
             fi
-        fi
-    debug_message "Disabling verbose output to prevent logspam while waiting for user at timestamp: $(date +%s)"
-    set +x
-    done
-    debug_message "Re-enabling verbose output after finding user at timestamp: $(date +%s)"
-
+        debug_message "Disabling verbose output to prevent logspam while waiting for user at timestamp: $(date +%s)"
+        set +x
+        done
+        debug_message "Re-enabling verbose output after finding user at timestamp: $(date +%s)";;
+    esac
 }
 
 #Check for custom config. We prioritize this even over a mobileconfig file.
@@ -1253,7 +1260,7 @@ function configure_silent_mode(){
             true
         }
 
-        function wait_for_user(){
+        function loginwindow_action(){
             true
         }
 
@@ -1585,10 +1592,10 @@ showProgressBar="false"
 progressBarDisplayNames="false"
 showAtLoginWindow="false"
 
-#############################################
-#   Wait until a user is verified logged in #
-#############################################
-wait_for_user
+###############################################
+# Check loginwindow or wait for verified user #
+###############################################
+loginwindow_action
 
 # Get the currently logged in user home folder and UID if not running from loginwindow
 if [ "$showAtLoginWindow" = "true"]; then
