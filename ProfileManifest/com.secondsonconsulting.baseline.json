@@ -33,6 +33,37 @@
             "description": "Define scripts that are run immediately as the user logs in, prior to any Baseline SwiftDialog windows. These scripts are the place to add your custom welcome messages or pre-flight scripts.",
             "property_order": 5
         },
+        "Catalog": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "DisplayName": {
+                        "type": "string",
+                        "title": "Display Name",
+                        "description": "The name you want to appear in the SwiftDialog menu as this Catalog app is installed."
+                    },
+                    "Label": {
+                        "type": "string",
+                        "title": "AltFilePath",
+                        "description": "Optional. An alternative file path to verify installation against."
+                    },
+                    "Icon": {
+                        "type": "string",
+                        "title": "Icon",
+                        "description": "The icon you want to appear in the SwiftDialog menu as this Catalog app is installed. Can be a URL or local file path."
+                    },
+                    "Subtitle": {
+                        "type": "string",
+                        "title": "Subtitle",
+                        "description": "The subtitle text to appear on this line item."
+                    }
+                }
+            },
+            "title": "Catalog App Titles",
+            "description": "Define App Catalog titles to be checked by Baseline. Supports both VPP and MDM App Catalogs.",
+            "property_order": 10
+        },
         "Installomator": {
             "type": "array",
             "items": {
