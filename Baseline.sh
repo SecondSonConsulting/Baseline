@@ -1523,6 +1523,7 @@ while [ ! -z "$1" ]; do
         -l|--loginwindow)
             log_message "Setting Login Window Mode from Command-Line"
             loginWindowEnabled=true
+            ;;
         *)
             cleanup_and_exit 82 "Unknown argument: $1"
             ;;
