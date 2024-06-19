@@ -5,6 +5,10 @@ set -x
 #   Written by Trevor Sysock of Second Son Consulting
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
+#
+#   LoginWindowMode contributed by Vince Mascoli of Foundation Technologies
+#   @PinkShellos on the MacAdmins Slack
+#   vince@fndtn.com
 
 scriptVersion="2.2"
 
