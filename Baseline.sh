@@ -5,6 +5,11 @@ set -x
 #   Written by Trevor Sysock of Second Son Consulting
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
+#
+#   Login Window support and Unified RunMode function
+#   Contributed by Vince Mascoli of Foundation Technologies
+#   @PinkShellos on the MacAdmins Slack
+#   vince@fndtn.com
 
 scriptVersion="2.2"
 
