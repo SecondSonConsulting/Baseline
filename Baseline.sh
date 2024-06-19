@@ -6,12 +6,9 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 #
-<<<<<<< HEAD
 #   Login Window support and Unified RunMode function
 #   Contributed by Vince Mascoli of Foundation Technologies
-=======
 #   LoginWindowMode contributed by Vince Mascoli of Foundation Technologies
->>>>>>> loginwindow
 #   @PinkShellos on the MacAdmins Slack
 #   vince@fndtn.com
 
