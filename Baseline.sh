@@ -43,10 +43,6 @@ BaselineLaunchDaemon="/Library/LaunchDaemons/com.secondsonconsulting.baseline.pl
 BaselineTempIconsDir=$(mktemp -d "${BaselineTempDir}/baselineTmpIcons.XXXX")
 ScriptOutputLog="/var/log/Baseline-ScriptsOutput.log"
 
-#LoginWindow RunMode files/folders
-BaselineLaunchAgent="/Library/LaunchAgents/com.secondsonconsulting.baseline.loginwindow.plist"
-LoginWindowCommandScript="$BaselineTempDir/Baseline-loginwindow.sh"
-
 #Binaries
 pBuddy="/usr/libexec/PlistBuddy"
 dialogPath="/usr/local/bin/dialog"
@@ -63,6 +59,37 @@ defaultWaitForTimeout=300
 jamfLogFile="/private/var/log/jamf.log"
 
 chmod -R 655 "${BaselineTempDir}"
+
+#LoginWindow RunMode files/folders
+BaselineLaunchAgent="/Library/LaunchAgents/com.secondsonconsulting.baseline.loginwindow.plist"
+LoginWindowCommandScript="$BaselineTempDir/Baseline-loginwindow.sh"
+AGENTDATA=$(cat <<-EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>AbandonProcessGroup</key>
+        <true/>
+        <key>Label</key>
+        <string>com.secondsonconsulting.baseline.loginwindow</string>
+        <key>ProgramArguments</key>
+        <array>
+            <string>$LoginWindowCommandScript</string>
+        </array>
+        <key>OnDemand</key>
+        <false/>
+        <key>LaunchOnlyOnce</key>
+        <true/>
+        <key>LimitLoadToSessionType</key>
+        <string>LoginWindow</string>
+        <key>StandardErrorPath</key>
+        <string>/var/log/BaselineOutput.log</string>
+        <key>StandardOutPath</key>
+        <string>/var/log/BaselineOutput.log</string>
+    </dict>
+</plist>
+EOF
+)
 
 ########################################################################################################
 ########################################################################################################
@@ -1259,32 +1286,7 @@ function configure_runmode_setting(){
     elif [ "$loginWindowMode" = "true" ]; then
         # create loginwindow launch agent and command script
         function initiate_runmode(){
-            cat <<-EOF > "$BaselineLaunchAgent"
-            <?xml version="1.0" encoding="UTF-8"?>
-            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-            <plist version="1.0">
-            <dict>
-                <key>AbandonProcessGroup</key>
-                <true/>
-                <key>Label</key>
-                <string>com.secondsonconsulting.baseline.loginwindow</string>
-                <key>ProgramArguments</key>
-                <array>
-                    <string>$LoginWindowCommandScript</string>
-                </array>
-                <key>OnDemand</key>
-                <false/>
-                <key>LaunchOnlyOnce</key>
-                <true/>
-                <key>LimitLoadToSessionType</key>
-                <string>LoginWindow</string>
-                <key>StandardErrorPath</key>
-                <string>/var/log/BaselineOutput.log</string>
-                <key>StandardOutPath</key>
-                <string>/var/log/BaselineOutput.log</string>
-            </dict>
-            </plist>
-            EOF
+            echo "$AGENTDATA"  > "$BaselineLaunchAgent"
             /usr/bin/touch "$LoginWindowCommandScript"
             chmod +x "$LoginWindowCommandScript"
             log_message "Created loginwindow launch agent and loginwindow command script file."
@@ -1906,11 +1908,6 @@ build_dialog_list_options
 #Create our initial Dialog Window. Do this in an "until" loop, and attempts 10 times before exiting in case it fails to launch for some reason
 dialogAttemptCount=1
 if ! $silentModeEnabled; then
-    if $loginWindowModeEnabled; then
-        log_message "Loginwindow Mode enabled, output command to script and bootstrap LaunchAgent."
-        echo "${finalListCommand[@]} --commandfile $dialogCommandFile --jsonfile $dialogJsonFile" > "$LoginWindowCommandScript"
-        launchctl bootstrap system "$BaselineLauchAgent"
-    fi
     until pgrep -q -x "Dialog"; do
         if [ "$dialogAttemptCount" -le 10 ]; then
             ${finalListCommand[@]} \
@@ -1980,24 +1977,12 @@ dialog_command "quit:"
 #Do final script swiftDialog stuff
 #If the failList is empty, this means success
 if [ -z "$failList" ]; then
-    if $loginWindowModeEnabled; then
-        log_message "Run success dialog from loginwindow"
-        echo "${finalSuccessCommand[@]}" > "$LoginWindowCommandScript"
-        launchctl bootstrap system "$BaselineLauchAgent"
-    else
-        present_success_window
-    fi
+    present_success_window
     update_tracker "Baseline" 0
     # We are done!
     cleanup_and_restart 0 "Baseline completed - All items successful."
 else
-    if $loginWindowModeEnabled; then
-        log_message "Run failure dialog from loginwindow"
-        echo "${finalFailureCommand[@]} ${failListItems[@]}" > "$LoginWindowCommandScript"
-        launchctl bootstrap system "$BaselineLauchAgent"
-    else
-        present_failure_window
-    fi
+    present_failure_window
     update_tracker "Baseline" 1
     # We are done!
     cleanup_and_restart 0 "Baseline completed - Some items failed."
