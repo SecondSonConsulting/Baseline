@@ -599,7 +599,6 @@ function process_scripts(){
     while $pBuddy -c "Print :${1}:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
         check_for_bail_out
         #Unset variables for next loop
-        unset asUser
         unset useVerboseJamf
         unset jamfVerbosePID
         unset expectedMD5
@@ -614,8 +613,6 @@ function process_scripts(){
         currentDisplayName=$($pBuddy -c "Print :${1}:${currentIndex}:DisplayName" "$BaselineConfig")
         #Set the current script name
         currentScriptPath=$($pBuddy -c "Print :${1}:${currentIndex}:ScriptPath" "$BaselineConfig")
-        #Set where we are running in the user context or root
-        asUser=$($pBuddy -c "Print :${1}:${currentIndex}:AsUser" "$BaselineConfig" )
         #Check if the defined script is a remote path
         if [[ ${currentScriptPath:0:4} == "http" ]]; then
             #Set variable to the base file name to be downloaded
@@ -707,11 +704,7 @@ function process_scripts(){
         fi
 
         #Call our script with our desired options. Default options first, so that they can be overriden by "currentArguments"
-        if [[ $asUser == "true" ]]; then
-            /bin/launchctl asuser "$currentUserUID" sudo -u "$currentUser" "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
-        else
-            "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
-        fi
+        "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
         scriptExitCode=$?
         if [ $scriptExitCode != 0 ]; then
             report_message "Failed Item - Script runtime error: $currentScript - Exit Code: $scriptExitCode"
@@ -1895,6 +1888,8 @@ fi
 if [ "$dryRun" = true ]; then
     sleep 5
 fi
+
+process_scripts FinalScripts
 
 #Close our running dialog window
 dialog_command "quit:"
