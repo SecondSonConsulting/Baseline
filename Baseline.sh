@@ -599,7 +599,6 @@ function process_scripts(){
     while $pBuddy -c "Print :${1}:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
         check_for_bail_out
         #Unset variables for next loop
-        unset asUser
         unset useVerboseJamf
         unset jamfVerbosePID
         unset expectedMD5
@@ -1957,6 +1956,8 @@ fi
 if [ "$dryRun" = true ]; then
     sleep 5
 fi
+
+process_scripts FinalScripts
 
 #Close our running dialog window
 dialog_command "quit:"
