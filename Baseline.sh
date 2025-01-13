@@ -783,8 +783,10 @@ function process_pkgs(){
         unset currentPKGPath
         unset expectedTeamID
         unset expectedMD5
-        unset actualTeamID
         unset actualMD5
+        unset expectedSHA256
+        unset actualSHA256
+        unset actualTeamID
         unset currentArguments
         unset currentArgumentArray
         unset currentDisplayName
