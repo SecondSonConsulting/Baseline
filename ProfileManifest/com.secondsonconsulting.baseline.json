@@ -17,6 +17,11 @@
                         "title": "Script Path",
                         "description": "A path to the script you want to run. Can be a local file path or a URL."
                     },
+                    "SHA256": {
+                        "type": "string",
+                        "title": "SHA256",
+                        "description": "The expected SHA256 of the script being run."
+                    },
                     "MD5": {
                         "type": "string",
                         "title": "MD5",
@@ -89,6 +94,11 @@
                         "title": "TeamID",
                         "description": "The expected TeamID of the package being installed."
                     },
+                    "SHA256": {
+                        "type": "string",
+                        "title": "SHA256",
+                        "description": "The expected SHA256 of the package being installed."
+                    },
                     "MD5": {
                         "type": "string",
                         "title": "MD5",
@@ -129,6 +139,11 @@
                         "type": "string",
                         "title": "Script Path",
                         "description": "A path to the script you want to run. Can be a local file path or a URL."
+                    },
+                    "SHA256": {
+                        "type": "string",
+                        "title": "SHA256",
+                        "description": "The expected SHA256 of the script being run."
                     },
                     "MD5": {
                         "type": "string",

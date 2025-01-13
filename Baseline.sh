@@ -604,6 +604,8 @@ function process_scripts(){
         unset jamfVerbosePID
         unset expectedMD5
         unset actualMD5
+        unset expectedSHA256
+        unset actualSHA256
         unset currentArguments
         unset currentArgumentArray
         unset currentScript
@@ -659,7 +661,30 @@ function process_scripts(){
         if [[ ${currentScriptPath} == "/usr/local/bin/jamf" ]] && $showVerboseJamf ; then
             jamf_verbose_dialog "$currentDisplayName" & jamfVerbosePID=$!
         fi
-        #Check for MD5 validation
+        ##Check for SHA256 validation
+        if $pBuddy -c "Print :${1}:${currentIndex}:SHA256" "$BaselineConfig" > /dev/null 2>&1; then
+            #This script has SHA256 validation provided
+            #Read the expected SHA256 value from the profile
+            expectedSHA256=$($pBuddy -c "Print :${1}:${currentIndex}:SHA256" "$BaselineConfig")
+            #Calculate the actual SHA256 of the script
+            actualSHA256=$(shasum -a 256 "$currentScript" | awk '{ print $1 }')
+            #Evaluate whether the expected and actual SHA256 do not match
+            if [ "$actualSHA256" != "$expectedSHA256" ]; then
+                report_message "Failed Item - Script SHA256 error: $currentScriptPath - Expected $expectedSHA256 - Actual $actualSHA256"
+                # Iterate the index up one
+                currentIndex=$((currentIndex+1))
+                # Only increment the progress bar if we're processing Scripts, not InitialScripts since users won't see those
+                if [ "$1" = "Scripts" ]; then
+                    increment_progress_bar
+                fi
+                # Report the fail
+                dialog_command "listitem: title: $currentDisplayName, status: fail"
+                failList+=("$currentDisplayName")
+                # Bail this pass through the while loop and continue processing next item
+                continue
+            fi
+        fi
+        ##Check for MD5 validation
         if $pBuddy -c "Print :${1}:${currentIndex}:MD5" "$BaselineConfig" > /dev/null 2>&1; then
             #This script has MD5 validation provided
             #Read the expected MD5 value from the profile
@@ -758,8 +783,10 @@ function process_pkgs(){
         unset currentPKGPath
         unset expectedTeamID
         unset expectedMD5
-        unset actualTeamID
         unset actualMD5
+        unset expectedSHA256
+        unset actualSHA256
+        unset actualTeamID
         unset currentArguments
         unset currentArgumentArray
         unset currentDisplayName
@@ -845,6 +872,13 @@ function process_pkgs(){
             #This pkg does not have TeamID Validation defined
             expectedTeamID=""
         fi
+        if $pBuddy -c "Print :Packages:${currentIndex}:SHA256" "$BaselineConfig" > /dev/null 2>&1; then
+            #This script has SHA256 defined
+            expectedSHA256=$($pBuddy -c "Print :Packages:${currentIndex}:SHA256" "$BaselineConfig")
+        else
+            #This script does not have SHA256 defined
+            expectedSHA256=""
+        fi
         if $pBuddy -c "Print :Packages:${currentIndex}:MD5" "$BaselineConfig" > /dev/null 2>&1; then
             #This script has MD5 defined
             expectedMD5=$($pBuddy -c "Print :Packages:${currentIndex}:MD5" "$BaselineConfig")
@@ -878,6 +912,28 @@ function process_pkgs(){
             fi
         fi
         
+        # Check SHA256, if a value has been provided
+        if [ -n "$expectedSHA256" ]; then
+            #Get SHA256 for the current PKG
+            actualSHA256=$(shasum -a 256 "$currentPKG" | awk '{ print $1 }')
+            # Check if actual does not match expected
+            if [ "$expectedSHA256" != "$actualSHA256" ]; then
+                report_message "Failed Item - Package SHA256 error: $currentPKG - Expected - $expectedSHA256 Actual - $actualSHA256"
+                dialog_command "listitem: title: $currentDisplayName, status: fail"
+                failList+=("$currentDisplayName")
+                # Iterate the index up one
+                currentIndex=$((currentIndex+1))
+                increment_progress_bar
+                # Report the fail
+                dialog_command "listitem: title: $currentDisplayName, status: fail"
+                update_tracker $currentDisplayName 99
+                # Bail this pass through the while loop and continue processing next item
+                continue
+            else
+                log_message "SHA256 of PKG validated: $currentPKG $expectedSHA256"
+            fi
+        fi
+
         # Check MD5, if a value has been provided
         if [ -n "$expectedMD5" ]; then
             #Get MD5 for the current PKG
