@@ -230,7 +230,7 @@ function cleanup_and_restart(){
         sleep 1
     done
     # Kill our caffeinate command
-    kill "$caffeinatepid"
+    kill "$caffeinatepid"  2> /dev/null
     # Close dialog window
     dialog_command "quit:"
 
@@ -460,71 +460,109 @@ function build_installomator_array(){
 
 function process_installomator_labels(){
     #Set an index internal to this function
-    currentIndex=0
+    local currentIndex=0
     #Loop through and test if there is a value in the slot of this index for the given array
     #If this command fails it means we've reached the end of the array in the config file (or there are none) and we exit our loop
     while $pBuddy -c "Print :Installomator:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
         check_for_bail_out
-        if [ ! -e "$installomatorPath" ]; then
-            cleanup_and_exit 1 "ERROR: Installomator failed to install after numerous attempts. Exiting."
-        fi
-        #Set the current label name
-        currentLabel=$($pBuddy -c "Print :Installomator:${currentIndex}:Label" "$BaselineConfig")
-        #Check if there are Options defined, and set the variable accordingly
-        if $pBuddy -c "Print :Installomator:${currentIndex}:Arguments" "$BaselineConfig" > /dev/null 2>&1; then
-            #This label has options defined
-            currentArguments=$($pBuddy -c "Print :Installomator:${currentIndex}:Arguments" "$BaselineConfig")
-        else
-            #This label does not have options defined
-            currentArguments=""
-        fi
-        #Now we have to do a trick in case there are multiple arguments, some of which are quoted together
-        #Consider: /path/to/script.sh --font "Times New Roman"
-        #Used the eval trick outlined here: https://superuser.com/questions/1066455/how-to-split-a-string-with-quotes-like-command-arguments-in-bash
-        currentArgumentArray=()
-        if [ -n "$currentArguments" ]; then
-            eval 'for argument in '$currentArguments'; do currentArgumentArray+=$argument; done'
-        fi
-        #Get the display name of the label we're installing. We need this to update the dialog list
-        currentDisplayName=$($pBuddy -c "Print :Installomator:${currentIndex}:DisplayName" "$BaselineConfig")
-        
-        # Configure Installomator SwiftDialog Integration
-        useInstallomatorSwiftDialogIntegration=$($pBuddy -c "Print :InstallomatorSwiftDialogIntegration" "$BaselineConfig" 2> /dev/null)
 
-        # If we're using the integrated SwiftDialog, then
-        if  [[ $useInstallomatorSwiftDialogIntegration == "true" ]]; then
-            currentArgumentArray+="DIALOG_CMD_FILE=\"$dialogCommandFile\""
-            currentArgumentArray+=DIALOG_LIST_ITEM_NAME=\"$currentDisplayName\"
-        else
-            #Update the dialog window so that this item shows as "pending"
-            dialog_command "listitem: title: $currentDisplayName, status: wait"        
-        fi
-        
-        set_progressbar_text "$currentDisplayName"
-        #Call installomator with our desired options. Default options first, so that they can be overriden by "currentArguments"
-        $installomatorPath $currentLabel ${defaultInstallomatorOptions[@]} ${currentArgumentArray[@]} > /dev/null 2>&1
-        installomatorExitCode=$?
-        if [ $installomatorExitCode != 0 ]; then
-            report_message "Failed Item - Installomator: $currentLabel - Exit Code: $installomatorExitCode"
-            failList+=("$currentDisplayName")
-            # If we're NOT using the integrated SwiftDialog, then
-            if  [[ $useInstallomatorSwiftDialogIntegration != "true" ]]; then
-                dialog_command "listitem: title: $currentDisplayName, status: fail"
-            fi
-        else
-            report_message "Successful Item - Installomator: $currentLabel"
-            successList+=("$currentDisplayName")
-            if  [[ $useInstallomatorSwiftDialogIntegration != "true" ]]; then
-                dialog_command "listitem: title: $currentDisplayName, status: success"
-            fi
-       fi
-        update_tracker "$currentDisplayName" $installomatorExitCode
+        # Retrieve the label name
+        label=$($pBuddy -c "Print :Installomator:${currentIndex}:Label" "$BaselineConfig")
+
+        # Retrieve optional arguments
+        arguments=$($pBuddy -c "Print :Installomator:${currentIndex}:Arguments" "$BaselineConfig" 2>/dev/null || echo "")
+
+        # Retrieve the display name
+        displayName=$($pBuddy -c "Print :Installomator:${currentIndex}:DisplayName" "$BaselineConfig")
+
+        # Retrieve Installomator pre and post script
+        preInstallData=$($pBuddy -c "Print :Installomator:${currentIndex}:PreInstall" "$BaselineConfig" 2>/dev/null)
+        postInstallData=$($pBuddy -c "Print :Installomator:${currentIndex}:PostInstall" "$BaselineConfig" 2>/dev/null)
+
+        # Process individual Installomator label entry
+        process_installomator_label_entry "$currentIndex" "$label" "$arguments" "$displayName" "$preInstallData" "$postInstallData"
+
+        # Iterate to the next label
         currentIndex=$((currentIndex+1))
-        # This gets set for use with the BailOut feature
-        previousDisplayName="$currentDisplayName"
-        check_for_bail_out
-        increment_progress_bar
     done
+}
+
+function process_installomator_label_entry() {
+    # Unset variables for next loop
+    unset currentArgumentArray installomatorExitCode
+
+    local index="$1"
+    local label="$2"
+    local arguments="$3"
+    local displayName="$4"
+    local preInstallData="$5"
+    local postInstallData="$6"
+    
+    if [ ! -e "$installomatorPath" ]; then
+        cleanup_and_exit 1 "ERROR: Installomator failed to install after numerous attempts. Exiting."
+    fi
+
+    # Retrieve Installomator SwiftDialog integration setting
+    useSwiftDialog=$($pBuddy -c "Print :InstallomatorSwiftDialogIntegration" "$BaselineConfig" 2>/dev/null)
+
+    # Run Pre-Install Script if defined
+    if [ -n "$preInstallData" ]; then
+        process_script_entry "Installomator PreInstall" "$index" "$displayName PreInstall" \
+            "$($pBuddy -c "Print :Installomator:${index}:PreInstall:ScriptPath" "$BaselineConfig")" \
+            "$($pBuddy -c "Print :Installomator:${index}:PreInstall:AsUser" "$BaselineConfig" 2>/dev/null)" \
+            "$($pBuddy -c "Print :Installomator:${index}:PreInstall:SHA256" "$BaselineConfig" 2>/dev/null)" \
+            "$($pBuddy -c "Print :Installomator:${index}:PreInstall:MD5" "$BaselineConfig" 2>/dev/null)" \
+            "$($pBuddy -c "Print :Installomator:${index}:PreInstall:Arguments" "$BaselineConfig" 2>/dev/null || echo "")"
+    fi
+
+    # Handle multiple arguments, ensuring quoted strings remain intact
+    currentArgumentArray=()
+    if [ -n "$arguments" ]; then
+        eval 'for argument in '$arguments'; do currentArgumentArray+=$argument; done'
+    fi
+
+    # If we're using the integrated SwiftDialog, then
+    if [[ $useSwiftDialog == "true" ]]; then
+        currentArgumentArray+="DIALOG_CMD_FILE=\"$dialogCommandFile\""
+        currentArgumentArray+=DIALOG_LIST_ITEM_NAME=\"$displayName\"
+    else
+        # Update the dialog window so that this item shows as "pending"
+        dialog_command "listitem: title: $displayName, status: wait"
+    fi
+
+    set_progressbar_text "$displayName"
+    # Call Installomator with the appropriate options
+    $installomatorPath "$label" "${defaultInstallomatorOptions[@]}" "${currentArgumentArray[@]}" > /dev/null 2>&1
+    installomatorExitCode=$?
+    if [ $installomatorExitCode != 0 ]; then
+        report_message "Failed Item - Installomator: $label - Exit Code: $installomatorExitCode"
+        failList+=("$displayName")
+        # If we're NOT using the integrated SwiftDialog, then
+        if [[ $useSwiftDialog != "true" ]]; then
+            dialog_command "listitem: title: $displayName, status: fail"
+        fi
+    else
+        report_message "Successful Item - Installomator: $label"
+        successList+=("$displayName")
+        if [[ $useSwiftDialog != "true" ]]; then
+            dialog_command "listitem: title: $displayName, status: success"
+        fi
+    fi
+
+    # Run Post-Install Script if defined
+    if [ -n "$postInstallData" ]; then
+        process_script_entry "Installomator PostInstall" "$index" "$displayName PostInstall" \
+            "$($pBuddy -c "Print :Installomator:${index}:PostInstall:ScriptPath" "$BaselineConfig")" \
+            "$($pBuddy -c "Print :Installomator:${index}:PostInstall:AsUser" "$BaselineConfig" 2>/dev/null)" \
+            "$($pBuddy -c "Print :Installomator:${index}:PostInstall:SHA256" "$BaselineConfig" 2>/dev/null)" \
+            "$($pBuddy -c "Print :Installomator:${index}:PostInstall:MD5" "$BaselineConfig" 2>/dev/null)" \
+            "$($pBuddy -c "Print :Installomator:${index}:PostInstall:Arguments" "$BaselineConfig" 2>/dev/null || echo "")"
+    fi
+
+    update_tracker "$displayName" "$installomatorExitCode"
+    # This gets set for use with the BailOut feature
+    previousDisplayName="$currentDisplayName"
+    increment_progress_bar
 }
 
 # Our main list builder for the Dialog window
@@ -592,399 +630,369 @@ function build_dialog_array(){
 function process_scripts(){
 # Usage: process_scripts ProfileKey
 # Actual use: process_scripts [ InitialScripts | Scripts ]
+    local profileKey="$1"
     #Set an index internal to this function
-    currentIndex=0
+    local currentIndex=0
     #Loop through and test if there is a value in the slot of this index for the given array
     #If this command fails it means we've reached the end of the array in the config file (or there are none) and we exit our loop
-    while $pBuddy -c "Print :${1}:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
+    while $pBuddy -c "Print :${profileKey}:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
         check_for_bail_out
-        #Unset variables for next loop
-        unset asUser
-        unset useVerboseJamf
-        unset jamfVerbosePID
-        unset expectedMD5
-        unset actualMD5
-        unset expectedSHA256
-        unset actualSHA256
-        unset currentArguments
-        unset currentArgumentArray
-        unset currentScript
-        unset currentScriptPath
-        unset currentDisplayName
-        unset scriptDownloadExitCode
-        #Get the display name of the label we're installing. We need this to update the dialog list
-        currentDisplayName=$($pBuddy -c "Print :${1}:${currentIndex}:DisplayName" "$BaselineConfig")
-        #Set the current script name
-        currentScriptPath=$($pBuddy -c "Print :${1}:${currentIndex}:ScriptPath" "$BaselineConfig")
-        #Set where we are running in the user context or root
-        asUser=$($pBuddy -c "Print :${1}:${currentIndex}:AsUser" "$BaselineConfig" )
-        #Check if the defined script is a remote path
-        if [[ ${currentScriptPath:0:4} == "http" ]]; then
-            #Set variable to the base file name to be downloaded
-            currentScript="$BaselineScripts/"$(basename "$currentScriptPath")
-            #Download the remote script, and put it in the Baseline Scripts directory
-            curl -s --fail-with-body "${currentScriptPath}" -o "$currentScript"
-            #Capture the exit code of our curl command
-            scriptDownloadExitCode=$?
-            #Check if curl exited cleanly
-            if [ "$scriptDownloadExitCode" != 0 ];then
-                #Report a failed download
-                report_message "Failed Item - Script download error: $currentScriptPath"
-                #Rm the output of our curl command. This will result in it being processed as a failure
-                rm_if_exists "$currentScript"
-            else
-                log_message "Script downloaded successfully: $currentScriptPath"
-                #Make our downloaded script executable
-                chmod +x "$currentScript"
-            fi
-        #Check if the given script exists on disk
-        elif [ -e "$currentScriptPath" ]; then
-            # The path to the script is a local file path which exists
-            currentScript="$currentScriptPath"
-        elif [ -e "$BaselineScripts/$currentScriptPath" ]; then
-            currentScript="$BaselineScripts/$currentScriptPath"
-        fi
-        #If the currentScript variable still isn't set to an existing file we need to bail..
-        if [ ! -e "$currentScript" ]; then
-            report_message "Failed Item - Script does not exist: $currentScript"
-            # Iterate the index up one
-            currentIndex=$((currentIndex+1))
-            increment_progress_bar
-            # Report the fail
-            dialog_command "listitem: title: $currentDisplayName, status: fail"
-            failList+=("$currentDisplayName")
-            update_tracker $currentDisplayName 99
-            # Bail this pass through the while loop and continue processing next item
-            continue
-        fi
-        #Check if this is a Jamf binary call and if we're using verbose jamf output
-        if [[ ${currentScriptPath} == "/usr/local/bin/jamf" ]] && $showVerboseJamf ; then
-            jamf_verbose_dialog "$currentDisplayName" & jamfVerbosePID=$!
-        fi
-        ##Check for SHA256 validation
-        if $pBuddy -c "Print :${1}:${currentIndex}:SHA256" "$BaselineConfig" > /dev/null 2>&1; then
-            #This script has SHA256 validation provided
-            #Read the expected SHA256 value from the profile
-            expectedSHA256=$($pBuddy -c "Print :${1}:${currentIndex}:SHA256" "$BaselineConfig")
-            #Calculate the actual SHA256 of the script
-            actualSHA256=$(shasum -a 256 "$currentScript" | awk '{ print $1 }')
-            #Evaluate whether the expected and actual SHA256 do not match
-            if [ "$actualSHA256" != "$expectedSHA256" ]; then
-                report_message "Failed Item - Script SHA256 error: $currentScriptPath - Expected $expectedSHA256 - Actual $actualSHA256"
-                # Iterate the index up one
-                currentIndex=$((currentIndex+1))
-                # Only increment the progress bar if we're processing Scripts, not InitialScripts since users won't see those
-                if [ "$1" = "Scripts" ]; then
-                    increment_progress_bar
-                fi
-                # Report the fail
-                dialog_command "listitem: title: $currentDisplayName, status: fail"
-                failList+=("$currentDisplayName")
-                # Bail this pass through the while loop and continue processing next item
-                continue
-            fi
-        fi
-        ##Check for MD5 validation
-        if $pBuddy -c "Print :${1}:${currentIndex}:MD5" "$BaselineConfig" > /dev/null 2>&1; then
-            #This script has MD5 validation provided
-            #Read the expected MD5 value from the profile
-            expectedMD5=$($pBuddy -c "Print :${1}:${currentIndex}:MD5" "$BaselineConfig")
-            #Calculate the actual MD5 of the script
-            actualMD5=$(md5 -q "$currentScript")
-            #Evaluate whether the expected and actual MD5 do not match
-            if [ "$actualMD5" != "$expectedMD5" ]; then
-                report_message "Failed Item - Script MD5 error: $currentScriptPath - Expected $expectedMD5 - Actual $actualMD5"
-                # Iterate the index up one
-                currentIndex=$((currentIndex+1))
-                # Only increment the progress bar if we're processing Scripts, not InitialScripts since users won't see those
-                if [ "$1" = "Scripts" ]; then
-                    increment_progress_bar
-                fi
-                # Report the fail
-                dialog_command "listitem: title: $currentDisplayName, status: fail"
-                failList+=("$currentDisplayName")
-                # Bail this pass through the while loop and continue processing next item
-                continue
-            fi
-        fi
-        #Check if there are Arguments defined, and set the variable accordingly
-        if $pBuddy -c "Print :${1}:${currentIndex}:Arguments" "$BaselineConfig" > /dev/null 2>&1; then
-            #This script has arguments defined
-            currentArguments=$($pBuddy -c "Print :${1}:${currentIndex}:Arguments" "$BaselineConfig")
-        else
-            #This script does not have arguments defined
-            currentArguments=""
-        fi
-        #Now we have to do a trick in case there are multiple arguments, some of which are quoted together
-        #Consider: /path/to/script.sh --font "Times New Roman"
-        #Used the eval trick outlined here: https://superuser.com/questions/1066455/how-to-split-a-string-with-quotes-like-command-arguments-in-bash
-        currentArgumentArray=()
-        if [ -n "$currentArguments" ]; then
-            eval 'for argument in '$currentArguments'; do currentArgumentArray+=$argument; done'
-        fi
 
-        #Update the dialog window so that this item shows as "pending"
-        dialog_command "listitem: title: $currentDisplayName, status: wait"
+        # Get the display name of the label we're installing. We need this to update the dialog list
+        displayName=$($pBuddy -c "Print :${profileKey}:${currentIndex}:DisplayName" "$BaselineConfig")
+        # Set the current script name
+        scriptPath=$($pBuddy -c "Print :${profileKey}:${currentIndex}:ScriptPath" "$BaselineConfig")
+        # Set where we are running in the user context or root
+        asUser=$($pBuddy -c "Print :${profileKey}:${currentIndex}:AsUser" "$BaselineConfig" 2>/dev/null)
+        # Retrieve expected SHA256 value if available
+        expectedSHA256=$($pBuddy -c "Print :${profileKey}:${currentIndex}:SHA256" "$BaselineConfig" 2>/dev/null)
+        # Retrieve expected MD5 value if available
+        expectedMD5=$($pBuddy -c "Print :${profileKey}:${currentIndex}:MD5" "$BaselineConfig" 2>/dev/null)
+        # Retrieve arguments if available
+        arguments=$($pBuddy -c "Print :${profileKey}:${currentIndex}:Arguments" "$BaselineConfig" 2>/dev/null || echo "")
 
-        #Only set the progress label if we're processing Scripts, not InitialScripts since users won't see those
-        if [ "$1" = "Scripts" ]; then
-            set_progressbar_text "$currentDisplayName"
-        fi
+        # Process the script entry with the extracted parameters
+        process_script_entry "$profileKey" "$currentIndex" "$displayName" "$scriptPath" "$asUser" "$expectedSHA256" "$expectedMD5" "$arguments"
 
-        #Call our script with our desired options. Default options first, so that they can be overriden by "currentArguments"
-        if [[ $asUser == "true" ]]; then
-            /bin/launchctl asuser "$currentUserUID" sudo -u "$currentUser" "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
-        else
-            "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
-        fi
-        scriptExitCode=$?
-        if [ $scriptExitCode != 0 ]; then
-            report_message "Failed Item - Script runtime error: $currentScript - Exit Code: $scriptExitCode"
-            dialog_command "listitem: title: $currentDisplayName, status: fail"
-            failList+=("$currentDisplayName")
-        else
-            report_message "Successful Item - Script: $currentScript"
-            dialog_command "listitem: title: $currentDisplayName, status: success"
-            successList+=("$currentDisplayName")
-        fi
-        update_tracker $currentDisplayName $scriptExitCode
-
-       #Iterate index for next loop
-        currentIndex=$((currentIndex+1))
-       
-        # This gets set for use with the BailOut feature
-        previousDisplayName="$currentDisplayName"
-
-        #Stuff in this section only happens if we're processing Scripts and not InitialScripts
-        if [ "$1" = "Scripts" ]; then
-            increment_progress_bar
-            #If we're using jamf, and jamf verbose is configured
-            if [[ ${currentScriptPath} == "/usr/local/bin/jamf" ]] && $showVerboseJamf; then
-                # If the PID is still running, kill it
-                if ps -x "$jamfVerbosePID"  > /dev/null 2>&1; then
-                    kill "$jamfVerbosePID"
-                fi
-                # Now clear the jamf verbose status text
-                dialog_command "listitem: title: ${currentDisplayName}, statustext: "
-            fi
-        fi
+        # Iterate index for next loop
+        currentIndex=$((currentIndex + 1))
     done
+}
+
+function process_script_entry() {
+    # Unset variables for next loop
+    unset useVerboseJamf jamfVerbosePID expectedMD5 actualMD5 expectedSHA256 actualSHA256
+    unset currentScript currentScriptPath scriptDownloadExitCode currentArgumentArray
+
+    local profileKey="$1"
+    local index="$2"
+    local displayName="$3"
+    local scriptPath="$4"
+    local asUser="$5"
+    local expectedSHA256="$6"
+    local expectedMD5="$7"
+    local arguments="$8"
+
+    # Set the current script path
+    currentScriptPath="$scriptPath"
+
+    # Check if the defined script is a remote path
+    if [[ ${currentScriptPath:0:4} == "http" ]]; then
+        # Set variable to the base file name to be downloaded
+        currentScript="$BaselineScripts/"$(basename "$currentScriptPath")
+        # Download the remote script, and put it in the Baseline Scripts directory
+        curl -s --fail-with-body "${currentScriptPath}" -o "$currentScript"
+        # Capture the exit code of our curl command
+        scriptDownloadExitCode=$?
+
+        # Check if curl exited cleanly
+        if [ "$scriptDownloadExitCode" != 0 ]; then
+            # Report a failed download
+            report_message "Failed Item - Script download error: $currentScriptPath"
+            # Remove the output of our curl command. This will result in it being processed as a failure
+            rm_if_exists "$currentScript"
+        else
+            log_message "Script downloaded successfully: $currentScriptPath"
+            # Make our downloaded script executable
+            chmod +x "$currentScript"
+        fi
+    # Check if the given script exists on disk
+    elif [ -e "$currentScriptPath" ]; then
+        currentScript="$currentScriptPath"
+    elif [ -e "$BaselineScripts/$currentScriptPath" ]; then
+        currentScript="$BaselineScripts/$currentScriptPath"
+    fi
+
+    # If the currentScript variable still isn't set to an existing file we need to bail..
+    if [ ! -e "$currentScript" ]; then
+        report_message "Failed Item - Script does not exist: $currentScript"
+        increment_progress_bar
+        dialog_command "listitem: title: $displayName, status: fail"
+        failList+=("$displayName")
+        update_tracker "$displayName" 99
+        return
+    fi
+
+    # Check if this is a Jamf binary call and if we're using verbose jamf output
+    if [[ ${currentScriptPath} == "/usr/local/bin/jamf" ]] && $showVerboseJamf; then
+        jamf_verbose_dialog "$displayName" & jamfVerbosePID=$!
+    fi
+
+    ## Check for SHA256 validation
+    if [ -n "$expectedSHA256" ]; then
+        # This script has SHA256 validation provided
+        # Calculate the actual SHA256 of the script
+        actualSHA256=$(shasum -a 256 "$currentScript" | awk '{ print $1 }')
+        # Evaluate whether the expected and actual SHA256 do not match
+        if [ "$actualSHA256" != "$expectedSHA256" ]; then
+            report_message "Failed Item - Script SHA256 error: $currentScriptPath - Expected $expectedSHA256 - Actual $actualSHA256"
+            increment_progress_bar
+            dialog_command "listitem: title: $displayName, status: fail"
+            failList+=("$displayName")
+            return
+        fi
+    fi
+
+    ## Check for MD5 validation
+    if [ -n "$expectedMD5" ]; then
+        # This script has MD5 validation provided
+        # Calculate the actual MD5 of the script
+        actualMD5=$(md5 -q "$currentScript")
+        # Evaluate whether the expected and actual MD5 do not match
+        if [ "$actualMD5" != "$expectedMD5" ]; then
+            report_message "Failed Item - Script MD5 error: $currentScriptPath - Expected $expectedMD5 - Actual $actualMD5"
+            increment_progress_bar
+            dialog_command "listitem: title: $displayName, status: fail"
+            failList+=("$displayName")
+            return
+        fi
+    fi
+
+    # Check if there are Arguments defined, and set the variable accordingly
+    currentArgumentArray=()
+    if [ -n "$arguments" ]; then
+        # Handle cases where arguments are quoted together
+        eval 'for argument in '$arguments'; do currentArgumentArray+=$argument; done'
+    fi
+
+    # Update the dialog window so that this item shows as "pending"
+    dialog_command "listitem: title: $displayName, status: wait"
+
+    #Only set the progress label if we're processing Scripts, PreInstall or PostInstall, not InitialScripts since users won't see those
+    if [ "$1" != "InitialScripts" ]; then
+        set_progressbar_text "$displayName"
+    fi
+
+    # Call our script with our desired options. Default options first, so that they can be overridden by "currentArguments"
+    if [[ $asUser == "true" ]]; then
+        /bin/launchctl asuser "$currentUserUID" sudo -u "$currentUser" "$currentScript" "${currentArgumentArray[@]}" >> "$ScriptOutputLog" 2>&1
+    else
+        "$currentScript" "${currentArgumentArray[@]}" >> "$ScriptOutputLog" 2>&1
+    fi
+    scriptExitCode=$?
+
+    if [ $scriptExitCode != 0 ]; then
+        report_message "Failed Item - $profileKey runtime error: $currentScript - Exit Code: $scriptExitCode"
+        dialog_command "listitem: title: $displayName, status: fail"
+        failList+=("$displayName")
+    else
+        report_message "Successful Item - $profileKey: $currentScript"
+        dialog_command "listitem: title: $displayName, status: success"
+        successList+=("$displayName")
+    fi
+
+    update_tracker "$displayName" "$scriptExitCode"
+    
+    # This gets set for use with the BailOut feature
+    previousDisplayName="$displayName"
+
+    #Stuff in this section only happens if we're processing Scripts, PostInstalll or PreInstall and not InitialScripts
+    if [ "$1" != "InitialScripts" ]; then
+        increment_progress_bar
+        #If we're using jamf, and jamf verbose is configured
+        if [[ ${currentScriptPath} == "/usr/local/bin/jamf" ]] && $showVerboseJamf; then
+            # If the PID is still running, kill it
+            if ps -x "$jamfVerbosePID"  > /dev/null 2>&1; then
+                kill "$jamfVerbosePID"
+            fi
+            # Now clear the jamf verbose status text
+            dialog_command "listitem: title: ${displayName}, statustext: "
+        fi
+    fi
 }
 
 function process_pkgs(){
     #Set an index internal to this function
-    currentIndex=0
+    local currentIndex=0
     #Loop through and test if there is a value in the slot of this index for the given array
     #If this command fails it means we've reached the end of the array in the config file (or there are none) and we exit our loop
     while $pBuddy -c "Print :Packages:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
         check_for_bail_out
-        # Unset variables for next loop
-        unset currentPKG
-        unset currentPKGPath
-        unset expectedTeamID
-        unset expectedMD5
-        unset actualMD5
-        unset expectedSHA256
-        unset actualSHA256
-        unset actualTeamID
-        unset currentArguments
-        unset currentArgumentArray
-        unset currentDisplayName
-        unset pkgBasename
-        unset downloadResult
-
-        #Get the display name of the label we're installing. We need this to update the dialog list
-        currentDisplayName=$($pBuddy -c "Print :Packages:${currentIndex}:DisplayName" "$BaselineConfig")
-        #Set the current package path
-        currentPKGPath=$($pBuddy -c "Print :Packages:${currentIndex}:PackagePath" "$BaselineConfig")
-        
-        ##Here is where we begin checking what kind of PKG was defined, and how to process it
-        ##The end result of this chunk of code, is that we have a valid path to a PKG on the file system
-        ##Else we bail and continue looping to install the next item
-
-        #Check if the package path is a web URL
-        if [[ ${currentPKGPath:0:4} == "http" ]]; then
-            # The path to the PKG appears to be a URL.
-            #Get the basename of the .pkg we're downloading
-            pkgBasename=$(basename "$currentPKGPath")
-            #Set the "currentPKG" variable, this gets used as the download path as well as processed later
-            currentPKG="$BaselinePackages"/"$pkgBasename"
-            #Check for conflict. If there's already a PKG in the directory we're downloading to, delete it
-            rm_if_exists "$currentPKG"
-            #Perform the download of the remote pkg
-            curl -LJs "$currentPKGPath" -o "$currentPKG"
-            #Capture the output of our curl command
-            downloadResult=$?
-            #Verify curl exited with 0
-            if [ "$downloadResult" != 0 ]; then
-                report_message "Failed Item - Package download error: $currentPKGPath"
-                # Iterate the index up one
-                currentIndex=$((currentIndex+1))
-                increment_progress_bar
-                # Report the fail
-                dialog_command "listitem: title: $currentDisplayName, status: fail"
-                # Bail this pass through the while loop and continue processing next item
-                continue
-            else
-                debug_message "PKG downloaded successfully: $currentPKGPath"
-            fi
-        fi
-        
-        # Check if the pkg exists
-        if [ -e "$currentPKG" ]; then
-            debug_message "PKG found: $currentPKG"
-        elif [ -e "$currentPKGPath" ]; then
-            # The path to the PKG appears to exist on the local file system
-            currentPKG="$currentPKGPath"
-        elif [ -e "$BaselinePackages/$currentPKGPath" ]; then
-            # The path to the PKG appears to exist within Baseline directory
-            currentPKG="$BaselinePackages/$currentPKGPath"
-        else
-            report_message "Failed Item - Package does not exist: $currentPKGPath"
-            dialog_command "listitem: title: $currentDisplayName, status: fail"
-            failList+=("$currentDisplayName")
-            currentIndex=$((currentIndex+1))
-            increment_progress_bar
-            update_tracker $currentDisplayName 99
-            continue
-        fi
 
         ##At this point, the pkg exists on the file system, or we've bailed on this loop.
+        # Get the display name of the label we're installing. We need this to update the dialog list
+        displayName=$($pBuddy -c "Print :Packages:${currentIndex}:DisplayName" "$BaselineConfig")
+        # Set the current package path
+        pkgPath=$($pBuddy -c "Print :Packages:${currentIndex}:PackagePath" "$BaselineConfig")
 
-        #Check if there are Arguments defined, and set the variable accordingly
-        if $pBuddy -c "Print :Packages:${currentIndex}:Arguments" "$BaselineConfig" > /dev/null 2>&1; then 
-            #This pkg has arguments defined
-            currentArguments=$($pBuddy -c "Print :Packages:${currentIndex}:Arguments" "$BaselineConfig")
+        # Retrieve optional values from the config
+        arguments=$($pBuddy -c "Print :Packages:${currentIndex}:Arguments" "$BaselineConfig" 2>/dev/null || echo "")
+        expectedTeamID=$($pBuddy -c "Print :Packages:${currentIndex}:TeamID" "$BaselineConfig" 2>/dev/null)
+        expectedSHA256=$($pBuddy -c "Print :Packages:${currentIndex}:SHA256" "$BaselineConfig" 2>/dev/null)
+        expectedMD5=$($pBuddy -c "Print :Packages:${currentIndex}:MD5" "$BaselineConfig" 2>/dev/null)
+
+        # Retrieve Installomator pre and post script
+        preInstallData=$($pBuddy -c "Print :Packages:${currentIndex}:PreInstall" "$BaselineConfig" 2>/dev/null)
+        postInstallData=$($pBuddy -c "Print :Packages:${currentIndex}:PostInstall" "$BaselineConfig" 2>/dev/null)
+
+        # Process the package entry
+        process_pkg_entry "$currentIndex" "$displayName" "$pkgPath" "$arguments" "$expectedTeamID" "$expectedSHA256" "$expectedMD5" "$preInstallData" "$postInstallData"
+
+        # Iterate index for next loop
+        currentIndex=$((currentIndex + 1))
+    done
+}
+
+function process_pkg_entry() {
+    # Unset variables for next loop
+    unset currentPKG currentPKGPath expectedTeamID expectedMD5 actualTeamID actualMD5
+    unset currentArguments currentArgumentArray currentDisplayName pkgBasename downloadResult
+
+    local index="$1"
+    local displayName="$2"
+    local pkgPath="$3"
+    local arguments="$4"
+    local expectedTeamID="$5"
+    local expectedSHA256="$6"
+    local expectedMD5="$7"
+    local preInstallData="$8"
+    local postInstallData="$9"
+
+    # Run Pre-Install Script if defined
+    if [ -n "$preInstallData" ]; then
+        process_script_entry "Package PreInstall" "$index" "$displayName PreInstall" \
+            "$($pBuddy -c "Print :Packages:${index}:PreInstall:ScriptPath" "$BaselineConfig")" \
+            "$($pBuddy -c "Print :Packages:${index}:PreInstall:AsUser" "$BaselineConfig" 2>/dev/null)" \
+            "$($pBuddy -c "Print :Packages:${index}:PreInstall:SHA256" "$BaselineConfig" 2>/dev/null)" \
+            "$($pBuddy -c "Print :Packages:${index}:PreInstall:MD5" "$BaselineConfig" 2>/dev/null)" \
+            "$($pBuddy -c "Print :Packages:${index}:PreInstall:Arguments" "$BaselineConfig" 2>/dev/null || echo "")"
+    fi
+
+    # Check if the package path is a web URL
+    if [[ ${pkgPath:0:4} == "http" ]]; then
+        # The path to the PKG appears to be a URL.
+        # Get the basename of the .pkg we're downloading
+        pkgBasename=$(basename "$pkgPath")
+        # Set the "currentPKG" variable, this gets used as the download path as well as processed later
+        currentPKG="$BaselinePackages/$pkgBasename"
+        # Check for conflict. If there's already a PKG in the directory we're downloading to, delete it
+        rm_if_exists "$currentPKG"
+        # Perform the download of the remote pkg
+        curl -LJs "$pkgPath" -o "$currentPKG"
+        # Capture the output of our curl command
+        downloadResult=$?
+        # Verify curl exited with 0
+        if [ "$downloadResult" != 0 ]; then
+            report_message "Failed Item - Package download error: $pkgPath"
+            increment_progress_bar
+            dialog_command "listitem: title: $displayName, status: fail"
+            return
         else
             #This pkg does not have arguments defined
             currentArguments=""
         fi
-        #Now we have to do a trick in case there are multiple arguments, some of which are quoted together
-        #Consider: /path/to/script.sh --font "Times New Roman"
-        #Used the eval trick outlined here: https://superuser.com/questions/1066455/how-to-split-a-string-with-quotes-like-command-arguments-in-bash
-        currentArgumentArray=()
-        eval 'for argument in '$currentArguments'; do currentArgumentArray+=$argument; done'
+    fi
 
-        if $pBuddy -c "Print :Packages:${currentIndex}:TeamID" "$BaselineConfig" > /dev/null 2>&1; then
-            #This pkg has TeamID defined
-            expectedTeamID=$($pBuddy -c "Print :Packages:${currentIndex}:TeamID" "$BaselineConfig")
-        else
-            #This pkg does not have TeamID Validation defined
-            expectedTeamID=""
-        fi
-        if $pBuddy -c "Print :Packages:${currentIndex}:SHA256" "$BaselineConfig" > /dev/null 2>&1; then
-            #This script has SHA256 defined
-            expectedSHA256=$($pBuddy -c "Print :Packages:${currentIndex}:SHA256" "$BaselineConfig")
-        else
-            #This script does not have SHA256 defined
-            expectedSHA256=""
-        fi
-        if $pBuddy -c "Print :Packages:${currentIndex}:MD5" "$BaselineConfig" > /dev/null 2>&1; then
-            #This script has MD5 defined
-            expectedMD5=$($pBuddy -c "Print :Packages:${currentIndex}:MD5" "$BaselineConfig")
-        else
-            #This script does not have MD5 defined
-            expectedMD5=""
-        fi
-        #Update the dialog window so that this item shows as "pending"
-        dialog_command "listitem: title: $currentDisplayName, status: wait"
-        set_progressbar_text "$currentDisplayName"
-
-        ## Package validation happens here
-        # Check TeamID, if a value has been provided
-        if [ -n "$expectedTeamID" ]; then
-            #Get the TeamID for the current PKG
-            actualTeamID=$(spctl -a -vv -t install "$currentPKG" 2>&1 | awk -F '(' '/origin=/ {print $2 }' | tr -d ')' )
-            # Check if actual does not match expected
-            if [ "$expectedTeamID" != "$actualTeamID" ]; then
-                report_message "Failed Item - Package TeamID error: $currentPKG - Expected - $expectedTeamID Actual - $actualTeamID"
-                dialog_command "listitem: title: $currentDisplayName, status: fail"
-                failList+=("$currentDisplayName")
-                # Iterate the index up one
-                currentIndex=$((currentIndex+1))
-                increment_progress_bar
-                # Report the fail
-                dialog_command "listitem: title: $currentDisplayName, status: fail"
-                # Bail this pass through the while loop and continue processing next item
-                continue
-            else
-                log_message "TeamID of PKG validated: $currentPKG $expectedTeamID"
-            fi
-        fi
-        
-        # Check SHA256, if a value has been provided
-        if [ -n "$expectedSHA256" ]; then
-            #Get SHA256 for the current PKG
-            actualSHA256=$(shasum -a 256 "$currentPKG" | awk '{ print $1 }')
-            # Check if actual does not match expected
-            if [ "$expectedSHA256" != "$actualSHA256" ]; then
-                report_message "Failed Item - Package SHA256 error: $currentPKG - Expected - $expectedSHA256 Actual - $actualSHA256"
-                dialog_command "listitem: title: $currentDisplayName, status: fail"
-                failList+=("$currentDisplayName")
-                # Iterate the index up one
-                currentIndex=$((currentIndex+1))
-                increment_progress_bar
-                # Report the fail
-                dialog_command "listitem: title: $currentDisplayName, status: fail"
-                update_tracker $currentDisplayName 99
-                # Bail this pass through the while loop and continue processing next item
-                continue
-            else
-                log_message "SHA256 of PKG validated: $currentPKG $expectedSHA256"
-            fi
-        fi
-
-        # Check MD5, if a value has been provided
-        if [ -n "$expectedMD5" ]; then
-            #Get MD5 for the current PKG
-            actualMD5=$(md5 -q "$currentPKG")
-            # Check if actual does not match expected
-            if [ "$expectedMD5" != "$actualMD5" ]; then
-                report_message "Failed Item - Package MD5 error: $currentPKG - Expected - $expectedMD5 Actual - $actualMD5"
-                dialog_command "listitem: title: $currentDisplayName, status: fail"
-                failList+=("$currentDisplayName")
-                # Iterate the index up one
-                currentIndex=$((currentIndex+1))
-                increment_progress_bar
-                # Report the fail
-                dialog_command "listitem: title: $currentDisplayName, status: fail"
-                update_tracker $currentDisplayName 99
-                # Bail this pass through the while loop and continue processing next item
-                continue
-            else
-                log_message "MD5 of PKG validated: $currentPKG $expectedMD5"
-            fi
-        fi
-
-        ## The package installation happens here. We do this in a variable so we can capture the output and report it for debugging
-	    pkgInstallerOutput=$(installer -allowUntrusted -pkg "$currentPKG" -target / ${currentArgumentArray[@]} )
-        # Capture the installer exit code
-        pkgExitCode=$?
-        # Verify the install completed successfully
-        if [ $pkgExitCode != 0 ]; then
-            report_message "Failed Item - Package installation error: $currentPKG - Exit Code: $pkgExitCode"
-            dialog_command "listitem: title: $currentDisplayName, status: fail"
-            failList+=("$currentDisplayName")
-        else
-            report_message "Successful Item - Package: $currentPKG"
-            dialog_command "listitem: title: $currentDisplayName, status: success"
-            successList+=("$currentDisplayName")
-        fi
-        update_tracker $currentDisplayName $pkgExitCode
-        debug_message "Output of the install package command: $pkgInstallerOutput"
-        # Iterate to the next index item, and continue our loop
-        currentIndex=$((currentIndex+1))
+    # Check if the pkg exists
+    if [ -e "$currentPKG" ]; then
+        debug_message "PKG found: $currentPKG"
+    elif [ -e "$pkgPath" ]; then
+        currentPKG="$pkgPath"
+    elif [ -e "$BaselinePackages/$pkgPath" ]; then
+        currentPKG="$BaselinePackages/$pkgPath"
+    else
+        report_message "Failed Item - Package does not exist: $pkgPath"
+        dialog_command "listitem: title: $displayName, status: fail"
+        failList+=("$displayName")
         increment_progress_bar
-        # This gets set for use with the BailOut feature
-        previousDisplayName="$currentDisplayName"
-        check_for_bail_out
-    done
+        update_tracker "$displayName" 99
+        return
+    fi
+
+    ## At this point, the pkg exists on the file system, or we've bailed on this loop.
+
+    #Now we have to do a trick in case there are multiple arguments, some of which are quoted together
+    #Consider: /path/to/script.sh --font "Times New Roman"
+    #Used the eval trick outlined here: https://superuser.com/questions/1066455/how-to-split-a-string-with-quotes-like-command-arguments-in-bash
+    currentArgumentArray=()
+    if [ -n "$arguments" ]; then
+        eval 'for argument in '$arguments'; do currentArgumentArray+=$argument; done'
+    fi
+
+    # Update the dialog window so that this item shows as "pending"
+    dialog_command "listitem: title: $displayName, status: wait"
+    set_progressbar_text "$displayName"
+
+    ## Package validation happens here
+    # Check TeamID, if a value has been provided
+    if [ -n "$expectedTeamID" ]; then
+        actualTeamID=$(spctl -a -vv -t install "$currentPKG" 2>&1 | awk -F '(' '/origin=/ {print $2 }' | tr -d ')' )
+        if [ "$expectedTeamID" != "$actualTeamID" ]; then
+            report_message "Failed Item - Package TeamID error: $currentPKG - Expected: $expectedTeamID - Actual: $actualTeamID"
+            dialog_command "listitem: title: $displayName, status: fail"
+            failList+=("$displayName")
+            increment_progress_bar
+            return
+        else
+            log_message "TeamID of PKG validated: $currentPKG $expectedTeamID"
+        fi
+    fi
+
+    # Check SHA256, if a value has been provided
+    if [ -n "$expectedSHA256" ]; then
+        actualSHA256=$(shasum -a 256 "$currentPKG" | awk '{ print $1 }')
+        if [ "$expectedSHA256" != "$actualSHA256" ]; then
+            report_message "Failed Item - Package SHA256 error: $currentPKG - Expected: $expectedSHA256 - Actual: $actualSHA256"
+            dialog_command "listitem: title: $displayName, status: fail"
+            failList+=("$displayName")
+            increment_progress_bar
+            update_tracker "$displayName" 99
+            return
+        else
+            log_message "SHA256 of PKG validated: $currentPKG $expectedSHA256"
+        fi
+    fi
+
+    # Check MD5, if a value has been provided
+    if [ -n "$expectedMD5" ]; then
+        actualMD5=$(md5 -q "$currentPKG")
+        if [ "$expectedMD5" != "$actualMD5" ]; then
+            report_message "Failed Item - Package MD5 error: $currentPKG - Expected: $expectedMD5 - Actual: $actualMD5"
+            dialog_command "listitem: title: $displayName, status: fail"
+            failList+=("$displayName")
+            increment_progress_bar
+            update_tracker "$displayName" 99
+            return
+        else
+            log_message "MD5 of PKG validated: $currentPKG $expectedMD5"
+        fi
+    fi
+
+    ## The package installation happens here.
+    pkgInstallerOutput=$(installer -allowUntrusted -pkg "$pkgPath" -target / "${currentArgumentArray[@]}")
+    pkgExitCode=$?
+
+    if [ $pkgExitCode != 0 ]; then
+        report_message "Failed Item - Package installation error: $pkgPath - Exit Code: $pkgExitCode"
+        dialog_command "listitem: title: $displayName, status: fail"
+        failList+=("$displayName")
+    else
+        report_message "Successful Item - Package: $pkgPath"
+        dialog_command "listitem: title: $displayName, status: success"
+        successList+=("$displayName")
+    fi
+
+    # Run Post-Install Script if defined
+    if [ -n "$postInstallData" ]; then
+        process_script_entry "Package PostInstall" "$index" "$displayName" \
+            "$($pBuddy -c "Print :Packages:${index}:PostInstall:ScriptPath" "$BaselineConfig")" \
+            "$($pBuddy -c "Print :Packages:${index}:PostInstall:AsUser" "$BaselineConfig" 2>/dev/null)" \
+            "$($pBuddy -c "Print :Packages:${index}:PostInstall:SHA256" "$BaselineConfig" 2>/dev/null)" \
+            "$($pBuddy -c "Print :Packages:${index}:PostInstall:MD5" "$BaselineConfig" 2>/dev/null)" \
+            "$($pBuddy -c "Print :Packages:${index}:PostInstall:Arguments" "$BaselineConfig" 2>/dev/null || echo "")"
+    fi
+
+    update_tracker "$displayName" "$pkgExitCode"
+    debug_message "Output of the install package command: $pkgInstallerOutput"
+    increment_progress_bar
 }
 
 function copy_icons_dir(){
     if [ -d "${BaselineIcons}" ]; then
+        setopt no_nomatch
         cp -r "${BaselineIcons}/"* "${BaselineTempIconsDir}/"
         chmod -R 655 "${BaselineTempIconsDir}"
+        unsetopt no_nomatch
     fi
 }
 
