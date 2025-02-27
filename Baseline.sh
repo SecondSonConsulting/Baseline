@@ -1826,7 +1826,7 @@ build_dialog_list_options
 #Create our initial Dialog Window. Do this in an "until" loop, and attempts 10 times before exiting in case it fails to launch for some reason
 dialogAttemptCount=1
 if ! $silentModeEnabled; then
-    until pgrep -q -x "Dialog"; do
+    until pgrep -q -f "$dialogAppPath.* --commandfile $dialogCommandFile --jsonfile $dialogJsonFile"; do
         if [ "$dialogAttemptCount" -le 10 ]; then
             ${finalListCommand[@]} \
             --commandfile "$dialogCommandFile" \
