@@ -617,7 +617,7 @@ function process_scripts(){
         #Set the current script name
         currentScriptPath=$($pBuddy -c "Print :${1}:${currentIndex}:ScriptPath" "$BaselineConfig")
         #Set where we are running in the user context or root
-        asUser=$($pBuddy -c "Print :${1}:${currentIndex}:AsUser" "$BaselineConfig" )
+        asUser=$($pBuddy -c "Print :${1}:${currentIndex}:AsUser" "$BaselineConfig" 2> /dev/null)
         #Check if the defined script is a remote path
         if [[ ${currentScriptPath:0:4} == "http" ]]; then
             #Set variable to the base file name to be downloaded
@@ -733,7 +733,13 @@ function process_scripts(){
 
         #Call our script with our desired options. Default options first, so that they can be overriden by "currentArguments"
         if [[ $asUser == "true" ]]; then
-            /bin/launchctl asuser "$currentUserUID" sudo -u "$currentUser" "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
+            if [[ -z "$currentUser" ]]; then
+                # If we don't have a user, we don't want to run this script
+                log_message "Script set to run asUser but no user logged in: $currentScript"
+                /usr/bin/false
+            else
+                /bin/launchctl asuser "$currentUserUID" sudo -u "$currentUser" "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
+            fi
         else
             "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
         fi
