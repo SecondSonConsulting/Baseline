@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="2.2.1"
+scriptVersion="2.3beta1"
 
 # MIT License
 # 
