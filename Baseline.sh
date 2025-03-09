@@ -1957,10 +1957,10 @@ if [ "$dryRun" = true ]; then
     sleep 5
 fi
 
-process_scripts FinalScripts
-
 #Close our running dialog window
 dialog_command "quit:"
+
+process_scripts FinalScripts
 
 #Do final script swiftDialog stuff
 #If the failList is empty, this means success
