@@ -155,11 +155,6 @@
                         "title": "Arguments",
                         "description": "Arguments you want to pass to the script when it is run."
                     },
-                    "AsUser": {
-                        "type": "boolean",
-                        "title": "As User",
-                        "description": "Run script in the user context."
-                    },
                     "Icon": {
                         "type": "string",
                         "title": "Icon",
@@ -200,6 +195,34 @@
                         "type": "string",
                         "title": "Subtitle",
                         "description": "The subtitle text to appear on this line item."
+                    }
+                }
+            },
+            "FinalScripts": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "DisplayName": {
+                            "type": "string",
+                            "title": "Display Name",
+                            "description": "The name you want to appear SwiftDialog and logs. Final Scripts will only be shown to the user if the item Fails."
+                        },
+                        "ScriptPath": {
+                            "type": "string",
+                            "title": "Script Path",
+                            "description": "A path to the script you want to run. Can be a local file path or a URL."
+                        },
+                        "MD5": {
+                            "type": "string",
+                            "title": "MD5",
+                            "description": "The expected MD5 of the script being run."
+                        },
+                        "Arguments": {
+                            "type": "string",
+                            "title": "Arguments",
+                            "description": "Arguments you want to pass to the script when it is run."
+                        }
                     }
                 }
             },

@@ -599,7 +599,6 @@ function process_scripts(){
     while $pBuddy -c "Print :${1}:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
         check_for_bail_out
         #Unset variables for next loop
-        unset asUser
         unset useVerboseJamf
         unset jamfVerbosePID
         unset expectedMD5
@@ -1960,6 +1959,8 @@ fi
 
 #Close our running dialog window
 dialog_command "quit:"
+
+process_scripts FinalScripts
 
 #Do final script swiftDialog stuff
 #If the failList is empty, this means success
