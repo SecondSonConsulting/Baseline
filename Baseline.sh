@@ -737,9 +737,11 @@ function process_scripts(){
                 log_message "Script set to run asUser but no user logged in: $currentScript"
                 /usr/bin/false
             else
+                log_message "Running Script: $currentScript as $currentUser with arguments: ${currentArgumentArray[@]}"
                 /bin/launchctl asuser "$currentUserUID" sudo -u "$currentUser" "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
             fi
         else
+            log_message "Running Script: $currentScript as root with arguments: ${currentArgumentArray[@]}"
             "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
         fi
         scriptExitCode=$?
