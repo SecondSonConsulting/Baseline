@@ -591,7 +591,7 @@ A profile can consist of payloads with different version numbers. For example, c
 				</dict>
 			</array>
 			<key>pfm_title</key>
-			<string>InitialScripts</string>
+			<string>FinalScripts</string>
 			<key>pfm_type</key>
 			<string>array</string>
 		</dict>
