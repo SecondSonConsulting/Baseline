@@ -1929,30 +1929,10 @@ process_scripts Scripts
 
 process_wait_for_items
 
-#Check if we have a custom Dialog.app icon waiting to process. If yes, reinstall dialog (unless config says to skip it)
-forceDialogReinstallSetting=$($pBuddy -c "Print ReinstallDialog" "$BaselineConfig" 2> /dev/null)
-
-# If the configuration set ReinstallDialog to false
-if  [[ "$forceDialogReinstallSetting" == "false" ]]; then
-    forceDialogReinstall="false"
-# If the configuration set ReinstallDialog to true
-elif  [[ "$forceDialogReinstallSetting" == "true" ]]; then
-    forceDialogReinstall="true"
-# If the configuration did not incluse ReinstallDialog, but we found a custom icon
-elif  [ -e "/Library/Application Support/Dialog/Dialog.png" ]; then
-    forceDialogReinstall="true"
-else
-    forceDialogReinstall="false"
-fi
-
-# Check if there is a custom Dialog icon and/or if we are going to reinstall
-# Must be skipped if SilentMode is enabled
-if $forceDialogReinstall && ! $silentModeEnabled; then
-    dialog_command "listitem: add, title: Finishing up"
-    dialog_command "listitem: Finishing up: wait"
-    rm_if_exists "$dialogAppPath"
-    install_dialog
-    dialog_command "listitem: Finishing up: success"
+# Set custom Dialog icon if it exists
+if [ -e "/Library/Application Support/Dialog/Dialog.png" ]; then
+    log_message "Custom Dialog icon found. Applying it."
+    "/Library/Application Support/Dialog/Dialog.app/Contents/MacOS/Dialog" --seticon "/Library/Application Support/Dialog/Dialog.png"
 fi
 
 if [ "$dryRun" = true ]; then
