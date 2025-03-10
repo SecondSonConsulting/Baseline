@@ -3,17 +3,24 @@ Huge thanks to all of the contributors and idea generators from the community, y
 
 Remember that during betas, you can point iMazing Profile Editor at the `ProfileManifest` folder to get the new keys before they're released to the public profile manifest library.
 
+## Please Help Test Betas
+If you rely on Baseline for deployments and updates, we would really appreciate testing your existing configurations against the new beta releases.
+
+If you're looking to utilize these new features, please test them out and let us know if any issues arise.
+
+The #baseline channel on the [Mac Admins Slack](https://macadmins.org) is the best place to get support or give feedback.
+
 ## New Features
-- New item type: `FinalScripts`
-    - Similar to `InitialScripts`, these items support all of the same configuration keys as `Scripts`
-    - `FinalScripts` run after the DialogListView window is closed, and prior to the `Success` or `Failure` dialog
+- New item type: `FinalScripts`.
+    - Similar to `InitialScripts`, these items support all of the same configuration keys as `Scripts`.
+    - `FinalScripts` run after the DialogListView window is closed, and prior to the `Success` or `Failure` dialog.
     - The original idea for this feature was to run a script that sends off the Baseline logs/status to a webhook, but it can be used for anything you see fit including another custom Dialog script prior to the completion screen.
     - Thank you to [@keepfacesbeard](https://github.com/keepfacesbeard) for this contribution!
 - Scripts, Initial Scripts, Final Scripts, and PKGs can now be validated with `SHA256` checksum, not just `MD5`.
     - These items now have `SHA256` as a configurable key in your configuration file.
 - Scripts, Initial Scripts, and Final Scripts can now be configured to run as the logged in user.
     - All Script type items have a boolean for `AsUser` to indicate they should be run as the logged in user.
-    - If there is no logged in user, these items will not be run and they will be listed as Failed
+    - If there is no logged in user, these items will not be run and they will be listed as Failed.
     - Another awesome contribution from [@drewdiver](https://github.com/drewdiver), thank you!
 
 ## Improvements
@@ -27,7 +34,7 @@ Remember that during betas, you can point iMazing Profile Editor at the `Profile
 - Baseline is now published under the MIT open-source license.
 
 ## Breaking Changes
-- `WaitFor` items have been changed in a manner which impacts user experience and possibly impacts functionality
+- `WaitFor` items have been changed in a manner which impacts user experience and possibly impacts functionality.
     -  Previously, `WaitFor` items weren't checked until all other items had completed.
     - `WaitFor` items will now be checked off in real-time as file paths are discovered. This should improve the end user experience when used along with tools like Munki or a script which installs multiple items.
     - `WaitFor` items will no longer get the spinny icon for better UI experience.
@@ -37,4 +44,4 @@ Remember that during betas, you can point iMazing Profile Editor at the `Profile
 ## Bug Fixes
 - Fixed a bug where Baseline would not launch the ListView window if any other Dialog process was running at the same time.
     - Big thank you to [@k2graham](https://github.com/k2graham) for this fix.
-- Fixed an edge case issue with the icons folder permissions
+- Fixed an edge case issue with the icons folder permissions.
