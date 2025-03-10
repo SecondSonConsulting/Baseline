@@ -1,7 +1,7 @@
 # Baseline v.2.3beta1 Release Notes
 Huge thanks to all of the contributors and idea generators from the community, you all make this tool way better than it would be.
 
-Remember that during Betas, you can point iMazing Profile Editor at the `ProfileManifest` folder to get the new keys before they're released to the public profile manifest library.
+Remember that during betas, you can point iMazing Profile Editor at the `ProfileManifest` folder to get the new keys before they're released to the public profile manifest library.
 
 ## New Features
 - New item type: `FinalScripts`
@@ -21,6 +21,8 @@ Remember that during Betas, you can point iMazing Profile Editor at the `Profile
     - Previously Baseline would reinstall swiftDialog if a custom Dialog icon was found.
     - This is no longer necessary, as swiftDialog now has a built in feature we can call with `--seticon` to make this update directly.
     - If a file is found at `/Library/Application Support/Dialog/Dialog.png` then Baseline will invoke swiftDialog with the `--seticon` option to accomplish the goal.
+    - Due to a quirk with macOS, if you are running Baseline.sh from a Terminal or as a child process of another app, that app will require PPPC permission to manipulate the app icon.
+        - Users running from the Baseline PKG (which uses LaunchD) or from their MDM script runner do not need to worry about this.
     - Major kudos, as always, to [@bartreardon](https://github.com/bartreardon) for continually improving swiftDialog. This project could not exist without him.
 
 ## Breaking Changes
