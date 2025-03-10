@@ -1424,7 +1424,7 @@ function process_wait_for_items(){
         waitForDisplayNames+=$("$pBuddy" -c "Print WaitFor:${waitCount}:DisplayName" "$BaselineConfig")
         waitCount=$(( waitCount + 1 ))
     done
-
+    
     # Put all of our WaitFor items into spinny wait mode
     #for waitForDisplayName in "${waitForDisplayNames[@]}"; do
     #   dialog_command "listitem: title: $waitForDisplayName, status: wait"
@@ -1916,6 +1916,22 @@ process_scripts Scripts
 # Clear any text off the progress bar
 set_progressbar_text " "
 
+# Starting WaitFor mode
+# Initiate empty arrays
+waitForPaths=()
+waitForDisplayNames=()
+failedWaitDisplayNames=()
+
+# This is our index as we build our arrays
+waitCount=0
+
+# Put all Paths/DisplayNames into our arrays
+while "$pBuddy" -c "Print WaitFor:${waitCount}:Path" "$BaselineConfig" > /dev/null 2>&1; do
+    waitForPaths+=$("$pBuddy" -c "Print WaitFor:${waitCount}:Path" "$BaselineConfig")
+    waitForDisplayNames+=$("$pBuddy" -c "Print WaitFor:${waitCount}:DisplayName" "$BaselineConfig")
+    waitCount=$(( waitCount + 1 ))
+done
+
 # If the wait_for_items function is still running OR we haven't reached our deadline, then sleep a bit
 until ! ps -p $waitForPID > /dev/null || [[ $(date +%s) -gt "${waitForDeadline}" ]]; do
     # Wait for the process to finish
@@ -1929,18 +1945,28 @@ if ps -p $waitForPID > /dev/null; then
     report_message "WaitFor items timed out with items remaining after $waitForTimeout seconds"
 fi
 
-# If we've gotten here, we're either done with all WaitFor items or we've timed out
-# If we still have WaitFor items, then we need to mark them as failures.
-if [ -n "$waitForDisplayNames" ]; then
-    debug_message "Failed WaitFor Paths: ${waitForPaths[@]}"
-    for failedWaitDisplayName in "${waitForDisplayNames[@]}"; do
-        report_message "Failed Item - WaitFor: $failedWaitDisplayName"
-        failList+=("$failedWaitDisplayName")
-        dialog_command "listitem: title: $failedWaitDisplayName, status: fail"
-        increment_progress_bar
+# If we have WaitFor paths
+if [ -n "$waitForPaths" ] ; then
+    # Check for each path in our Paths array, and see if it exists yet
+    for waitPath in "${waitForPaths[@]}"; do
+        # If our item does not exists
+        if [ ! -e "$waitPath" ]; then
+            # Find what index in our array the current item belongs to
+            indexItemOfFail="${waitForPaths[(Ie)${waitPath}]}"
+            # As long as that index is not zero
+            if [ "$indexItemOfFail" != 0 ]; then
+                # Mark the item as failed
+                failedWaitDisplayName="${waitForDisplayNames[${indexItemOfFail}]}"
+                report_message "Failed Item - WaitFor: $failedWaitDisplayName"
+                failList+=("$failedWaitDisplayName")
+                dialog_command "listitem: title: $failedWaitDisplayName, status: fail"
+            fi
+        fi
     done
-else
-    report_message "WaitFor - All items successful"
+fi
+
+if [ -n "$failedWaitDisplayNames" ]; then
+    report_message "One or more failed WaitFor items: $failedWaitDisplayNames"
 fi
 
 # Set custom Dialog icon if it exists
