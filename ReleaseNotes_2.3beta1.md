@@ -24,6 +24,7 @@ Remember that during betas, you can point iMazing Profile Editor at the `Profile
     - Due to a quirk with macOS, if you are running Baseline.sh from a Terminal or as a child process of another app, that app will require PPPC permission to manipulate the app icon.
         - Users running from the Baseline PKG (which uses LaunchD) or from their MDM script runner do not need to worry about this.
     - Major kudos, as always, to [@bartreardon](https://github.com/bartreardon) for continually improving swiftDialog. This project could not exist without him.
+- Baseline is now published under the MIT open-source license.
 
 ## Breaking Changes
 - `WaitFor` items have been changed in a manner which impacts user experience and possibly impacts functionality
@@ -36,3 +37,4 @@ Remember that during betas, you can point iMazing Profile Editor at the `Profile
 ## Bug Fixes
 - Fixed a bug where Baseline would not launch the ListView window if any other Dialog process was running at the same time.
     - Big thank you to [@k2graham](https://github.com/k2graham) for this fix.
+- Fixed an edge case issue with the icons folder permissions
