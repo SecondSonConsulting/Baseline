@@ -72,7 +72,7 @@ installomatorPath="/usr/local/Installomator/Installomator.sh"
 dialogCommandFile=$(mktemp "${BaselineTempDir}/baselineDialog.XXXXXX")
 dialogJsonFile=$(mktemp "${BaselineTempDir}/baselineJson.XXXX")
 expectedDialogTeamID="PWA5E9TQ59"
-defaultWaitForTimeout=300
+defaultWaitForTimeout=600
 
 # Path to the Jamf log file
 jamfLogFile="/private/var/log/jamf.log"
