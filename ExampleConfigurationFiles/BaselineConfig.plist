@@ -2,6 +2,19 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>InitialScripts</key>
+	<array>
+		<dict>
+			<key>Arguments</key>
+			<string>--fdsa</string>
+			<key>DisplayName</key>
+			<string>Initial Example Script</string>
+			<key>MD5</key>
+			<string>e567257026d6032dd232df75fd3ba500</string>
+			<key>ScriptPath</key>
+			<string>ExampleScript.sh</string>
+		</dict>
+	</array>
 	<key>Installomator</key>
 	<array>
 		<dict>
@@ -15,6 +28,30 @@
 			<string>Dockutil</string>
 			<key>Label</key>
 			<string>dockutil</string>
+		</dict>
+	</array>
+	<key>Packages</key>
+	<array>
+		<dict>
+			<key>DisplayName</key>
+			<string>Example Package</string>
+			<key>PackagePath</key>
+			<string>ExamplePKG.pkg</string>
+			<key>TeamID</key>
+			<string>7Q6XP5698G</string>
+		</dict>
+	</array>
+	<key>Scripts</key>
+	<array>
+		<dict>
+			<key>Arguments</key>
+			<string>--asdf</string>
+			<key>DisplayName</key>
+			<string>Example Script</string>
+			<key>MD5</key>
+			<string>e567257026d6032dd232df75fd3ba500</string>
+			<key>ScriptPath</key>
+			<string>ExampleScript.sh</string>
 		</dict>
 	</array>
 </dict>
