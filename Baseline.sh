@@ -13,19 +13,19 @@ set -x
 scriptVersion="2.3beta1"
 
 # MIT License
-#
+# 
 # Copyright (c) 2024 Second Son Consulting
-#
+# 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
 # in the Software without restriction, including without limitation the rights
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-#
+# 
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
-#
+# 
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -922,7 +922,7 @@ function process_pkgs(){
                 log_message "TeamID of PKG validated: $currentPKG $expectedTeamID"
             fi
         fi
-
+        
         # Check SHA256, if a value has been provided
         if [ -n "$expectedSHA256" ]; then
             #Get SHA256 for the current PKG
@@ -1501,19 +1501,6 @@ function process_wait_for_items(){
         debug_message "WaitFor values found. Initiating WaitFor"
     fi
 
-    # Clear any text off the progress bar
-    set_progressbar_text " "
-
-    # Check for a custom "WaitForTimeout" value
-    waitForTimeoutSetting=$($pBuddy -c "Print :WaitForTimeout" "$BaselineConfig" 2> /dev/null )
-
-    # If the "WaitForTimeout" value is an integer, set our timeout to that. Otherwise, set to default.
-    if [[ "${waitForTimeoutSetting}" =~ '^[0-9]+$' ]] ; then
-        waitForTimeout="${waitForTimeoutSetting}"
-    else
-        waitForTimeout="${defaultWaitForTimeout}"
-    fi
-
     # Initiate empty arrays
     waitForPaths=()
     waitForDisplayNames=()
@@ -1527,7 +1514,7 @@ function process_wait_for_items(){
         waitForDisplayNames+=$("$pBuddy" -c "Print WaitFor:${waitCount}:DisplayName" "$BaselineConfig")
         waitCount=$(( waitCount + 1 ))
     done
-
+    
     # Put all of our WaitFor items into spinny wait mode
     #for waitForDisplayName in "${waitForDisplayNames[@]}"; do
     #   dialog_command "listitem: title: $waitForDisplayName, status: wait"
@@ -2017,7 +2004,7 @@ waitForTimeoutSetting=$($pBuddy -c "Print :WaitForTimeout" "$BaselineConfig" 2> 
 if [[ "${waitForTimeoutSetting}" =~ '^[0-9]+$' ]] ; then
     waitForTimeout="${waitForTimeoutSetting}"
 else
-    waitForTimeout="${defaultWaitForTimeout}"
+    waitForTimeout="${defaultWaitForTimeout}"    
 fi
 # Set the time at which we'll stop waiting for items by getting the date now and adding the seconds for our deadline
 waitForDateNow=$(date +%s)
