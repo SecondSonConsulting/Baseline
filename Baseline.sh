@@ -13,19 +13,19 @@ set -x
 scriptVersion="2.3beta1"
 
 # MIT License
-#
+# 
 # Copyright (c) 2024 Second Son Consulting
-#
+# 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
 # in the Software without restriction, including without limitation the rights
 # to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 # copies of the Software, and to permit persons to whom the Software is
 # furnished to do so, subject to the following conditions:
-#
+# 
 # The above copyright notice and this permission notice shall be included in all
 # copies or substantial portions of the Software.
-#
+# 
 # THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 # IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 # FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -33,7 +33,7 @@ scriptVersion="2.3beta1"
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-#
+# 
 
 ########################################################################################################
 ########################################################################################################
@@ -100,7 +100,7 @@ function check_root(){
 # check we are running as root
 if [[ $(id -u) -ne 0 ]]; then
     echo "ERROR: This script must be run as root **EXITING**"
-    # Delete Baseline Temp Dir
+    # Delete Baseline Temp Dir 
     rm_if_exists "${BaselineTempDir}"
     exit 1
 fi
@@ -122,7 +122,7 @@ function debug_message(){
 
 #Publish a message to the log (and also to the debug channel)
 function log_message(){
-    echo "$(date): $*" | tee >( cat >> "$logFile" )
+    echo "$(date): $*" | tee >( cat >> "$logFile" ) 
     debug_message "$*"
 }
 
@@ -147,7 +147,7 @@ function report_message(){
 function initiate_logging(){
 if ! touch "$logFile" ; then
     debug_message "ERROR: Logging fail. Cannot create log file"
-    # Delete Baseline Temp Dir
+    # Delete Baseline Temp Dir 
     rm_if_exists "${BaselineTempDir}"
     exit 1
 else
@@ -165,7 +165,7 @@ function rm_if_exists(){
 function initiate_report(){
     if ! touch "$reportFile" ; then
         debug_message "ERROR: Reporting fail. Cannot create report file"
-        # Delete Baseline Temp Dir
+        # Delete Baseline Temp Dir 
         rm_if_exists "${BaselineTempDir}"
         exit 1
     else
@@ -190,7 +190,7 @@ function cleanup_and_exit(){
 
     # Log message
     report_message "$2"
-    report_message "Baseline exited with error code: $1"
+    report_message "Baseline exited with error code: $1" 
 
     # Delete the Baseline LaunchDaemon
     # Doing this in a loop because I've seen edge cases where it failed unexpectedly and it is high impact.
@@ -200,12 +200,12 @@ function cleanup_and_exit(){
     done
 
     kill "$caffeinatepid"
-    dialog_command "quit:"
+    dialog_command "quit:" 
     rm_if_exists "${BaselineTempDir}"
     if [ "$dryRun" != true ] && [ "$cleanupBaselineDirectory" = "true" ] ; then
         rm_if_exists "$BaselineDir"
     fi
-    # Delete Baseline Temp Dir
+    # Delete Baseline Temp Dir 
     rm_if_exists "${BaselineTempDir}"
     exit "$1"
 }
@@ -248,7 +248,7 @@ function cleanup_and_restart(){
     # If ForceRestart is set to false,  and dry run is off
     if $forceRestart && ! $dryRun ; then
         report_message "Force Restart is configured. Restarting"
-        # Delete Baseline Temp Dir
+        # Delete Baseline Temp Dir 
         rm_if_exists "${BaselineTempDir}"
         log_message "Forcing restart"
         shutdown -r now
@@ -256,12 +256,12 @@ function cleanup_and_restart(){
     elif $forceLogOut && ! $dryRun; then
         report_message "Force Log Out is set to true."
         osascript -e "tell application \"/System/Library/CoreServices/loginwindow.app\" to «event aevtrlgo»"
-        # Delete Baseline Temp Dir
+        # Delete Baseline Temp Dir 
         rm_if_exists "${BaselineTempDir}"
         exit "$1"
     elif ! $forceLogOut && ! $forceRestart && ! $dryRun; then
         report_message "Force Log Out and Force Restart are false. Exiting with no action."
-        # Delete Baseline Temp Dir
+        # Delete Baseline Temp Dir 
         rm_if_exists "${BaselineTempDir}"
         exit "$1"
     # If the script is in DryRun mode
@@ -269,14 +269,14 @@ function cleanup_and_restart(){
         report_message "Dry Run Enabled, no exit action taken."
         report_message "ForceRestart is set to: $forceRestart"
         report_message "ForceLogOut is set to: $forceLogOut"
-        # Delete Baseline Temp Dir
+        # Delete Baseline Temp Dir 
         rm_if_exists "${BaselineTempDir}"
         exit "$1"
     fi
 
     # Shutting down
     log_message "Unknown ExitAction determined. Falling back on default to ForceRestart"
-    # Delete Baseline Temp Dir
+    # Delete Baseline Temp Dir 
     rm_if_exists "${BaselineTempDir}"
     shutdown -r now
 }
@@ -371,7 +371,7 @@ function install_installomator(){
             fi
             # Remove the temporary working directory when done
             rm_if_exists "$tempDirectory"
-        fi
+        fi  
     done
 }
 
@@ -388,7 +388,7 @@ function wait_for_user(){
         if [ "$currentUser" = "root" ] \
             || [ "$currentUser" = "loginwindow" ] \
             || [ "$currentUser" = "_mbsetupuser" ] \
-            || [ -z "$currentUser" ]
+            || [ -z "$currentUser" ] 
         then
         #If we aren't verified yet, wait 1 second and try again
         sleep 1
@@ -418,7 +418,7 @@ function check_for_custom_plist(){
 function verify_configuration_file(){
     #We need to make sure our configuration file is in place. By the time the user logs in, this should have happened.
     debug_message "Verifying configuration file. Failure here probably means an MDM profile hasn't been properly scoped, or there's a problem with the MDM delivering the profile."
-
+    
     #Set timeout variables
     configFileTimeout=600
     configFileWaiting=0
@@ -491,7 +491,7 @@ function process_installomator_labels(){
         fi
         #Get the display name of the label we're installing. We need this to update the dialog list
         currentDisplayName=$($pBuddy -c "Print :Installomator:${currentIndex}:DisplayName" "$BaselineConfig")
-
+        
         # Configure Installomator SwiftDialog Integration
         useInstallomatorSwiftDialogIntegration=$($pBuddy -c "Print :InstallomatorSwiftDialogIntegration" "$BaselineConfig" 2> /dev/null)
 
@@ -501,9 +501,9 @@ function process_installomator_labels(){
             currentArgumentArray+=DIALOG_LIST_ITEM_NAME=\"$currentDisplayName\"
         else
             #Update the dialog window so that this item shows as "pending"
-            dialog_command "listitem: title: $currentDisplayName, status: wait"
+            dialog_command "listitem: title: $currentDisplayName, status: wait"        
         fi
-
+        
         set_progressbar_text "$currentDisplayName"
         #Call installomator with our desired options. Default options first, so that they can be overriden by "currentArguments"
         $installomatorPath $currentLabel ${defaultInstallomatorOptions[@]} ${currentArgumentArray[@]} > /dev/null 2>&1
@@ -574,7 +574,7 @@ function build_dialog_array(){
             #If no icon key is set, ensure it's blank
             currentIconPath=""
         fi
-
+        
         #Get the desired subtitle if populated in the configuration profile
         if $pBuddy -c "Print :$configKey:${index}:Subtitle" "$BaselineConfig" > /dev/null 2>&1; then
             currentSubtitle=$($pBuddy -c "Print :$configKey:${index}:Subtitle" "$BaselineConfig")
@@ -582,7 +582,7 @@ function build_dialog_array(){
             #If no icon key is set, ensure it's blank
             currentSubtitle=""
         fi
-
+        
         #Generate JSON entry for item
         #NOTE: We will strip out the final comma later to ensure a valid JSON
         dialogListJson+="{\"title\" : \"$currentDisplayName\",\"subtitle\" : \"$currentSubtitle\", \"icon\" : \"$currentIconPath\", \"status\" : \"\"},"
@@ -762,7 +762,7 @@ function process_scripts(){
 
        #Iterate index for next loop
         currentIndex=$((currentIndex+1))
-
+       
         # This gets set for use with the BailOut feature
         previousDisplayName="$currentDisplayName"
 
@@ -808,7 +808,7 @@ function process_pkgs(){
         currentDisplayName=$($pBuddy -c "Print :Packages:${currentIndex}:DisplayName" "$BaselineConfig")
         #Set the current package path
         currentPKGPath=$($pBuddy -c "Print :Packages:${currentIndex}:PackagePath" "$BaselineConfig")
-
+        
         ##Here is where we begin checking what kind of PKG was defined, and how to process it
         ##The end result of this chunk of code, is that we have a valid path to a PKG on the file system
         ##Else we bail and continue looping to install the next item
@@ -840,7 +840,7 @@ function process_pkgs(){
                 debug_message "PKG downloaded successfully: $currentPKGPath"
             fi
         fi
-
+        
         # Check if the pkg exists
         if [ -e "$currentPKG" ]; then
             debug_message "PKG found: $currentPKG"
@@ -863,7 +863,7 @@ function process_pkgs(){
         ##At this point, the pkg exists on the file system, or we've bailed on this loop.
 
         #Check if there are Arguments defined, and set the variable accordingly
-        if $pBuddy -c "Print :Packages:${currentIndex}:Arguments" "$BaselineConfig" > /dev/null 2>&1; then
+        if $pBuddy -c "Print :Packages:${currentIndex}:Arguments" "$BaselineConfig" > /dev/null 2>&1; then 
             #This pkg has arguments defined
             currentArguments=$($pBuddy -c "Print :Packages:${currentIndex}:Arguments" "$BaselineConfig")
         else
@@ -922,7 +922,7 @@ function process_pkgs(){
                 log_message "TeamID of PKG validated: $currentPKG $expectedTeamID"
             fi
         fi
-
+        
         # Check SHA256, if a value has been provided
         if [ -n "$expectedSHA256" ]; then
             #Get SHA256 for the current PKG
@@ -1062,7 +1062,7 @@ function check_for_bail_out(){
             # Exit with code 99
             cleanup_and_restart 99 "Bail out file identified: $bailOutFilePath"
         fi
-    fi
+    fi    
 }
 
 function check_restart_option(){
@@ -1083,7 +1083,7 @@ function check_restart_option(){
         log_message "Invalid value for LogOut key. Setting to default. Invalid Key Value: $logOutSetting"
         forceLogOut="unset"
     fi
-
+        
     if  [ -z $restartSetting ]; then
         log_message "No Restart key in configuration file"
         forceRestart="unset"
@@ -1158,7 +1158,7 @@ function increment_progress_bar(){
     progressBarValue=$((progressBarValue+1))
     # Do the math to determine total progress bar size for real increment
     progressBarPercentage=$((progressBarValue*100/progressBarTotal))
-
+    
     dialog_command "progress: $progressBarPercentage"
 }
 
@@ -1527,7 +1527,7 @@ function process_wait_for_items(){
         waitForDisplayNames+=$("$pBuddy" -c "Print WaitFor:${waitCount}:DisplayName" "$BaselineConfig")
         waitCount=$(( waitCount + 1 ))
     done
-
+    
     # Put all of our WaitFor items into spinny wait mode
     #for waitForDisplayName in "${waitForDisplayNames[@]}"; do
     #   dialog_command "listitem: title: $waitForDisplayName, status: wait"
@@ -1611,7 +1611,7 @@ if [ -z $dryRun ]; then
 fi
 
 while [ ! -z "$1" ]; do
-    case $1 in;
+    case $1 in; 
         "/")
             log_message "Shifting arguments for Jamf"
             shift 2
@@ -1848,7 +1848,7 @@ if $forceLogOut; then
     defaultListMessage+="\n\nYou will be logged out when it's ready for use."
 elif $forceRestart; then
     # Add a line break and a sentence about restarting.
-    defaultListMessage+="\n\nYour computer will restart when it's ready for use."
+    defaultListMessage+="\n\nYour computer will restart when it's ready for use." 
 fi
 
 configure_dialog_list_arguments "--title" "Your computer setup is underway"
@@ -2017,7 +2017,7 @@ waitForTimeoutSetting=$($pBuddy -c "Print :WaitForTimeout" "$BaselineConfig" 2> 
 if [[ "${waitForTimeoutSetting}" =~ '^[0-9]+$' ]] ; then
     waitForTimeout="${waitForTimeoutSetting}"
 else
-    waitForTimeout="${defaultWaitForTimeout}"
+    waitForTimeout="${defaultWaitForTimeout}"    
 fi
 # Set the time at which we'll stop waiting for items by getting the date now and adding the seconds for our deadline
 waitForDateNow=$(date +%s)
