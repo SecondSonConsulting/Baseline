@@ -1501,19 +1501,6 @@ function process_wait_for_items(){
         debug_message "WaitFor values found. Initiating WaitFor"
     fi
 
-    # Clear any text off the progress bar
-    set_progressbar_text " "
-
-    # Check for a custom "WaitForTimeout" value
-    waitForTimeoutSetting=$($pBuddy -c "Print :WaitForTimeout" "$BaselineConfig" 2> /dev/null )
-
-    # If the "WaitForTimeout" value is an integer, set our timeout to that. Otherwise, set to default.
-    if [[ "${waitForTimeoutSetting}" =~ '^[0-9]+$' ]] ; then
-        waitForTimeout="${waitForTimeoutSetting}"
-    else
-        waitForTimeout="${defaultWaitForTimeout}"
-    fi
-
     # Initiate empty arrays
     waitForPaths=()
     waitForDisplayNames=()
