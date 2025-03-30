@@ -1979,10 +1979,23 @@ if [ "$dryRun" = true ]; then
     sleep 5
 fi
 
-#Close our running dialog window
-dialog_command "quit:"
+# Check if we are closing the list window before running Final Scripts
+if $pBuddy -c "Print :CloseListBeforeFinalScripts" "$BaselineConfig" > /dev/null 2>&1; then
+    closeListBeforeFinalScripts=$($pBuddy -c "Print :CloseListBeforeFinalScripts" "$BaselineConfig")
+else
+    closeListBeforeFinalScripts="false"
+fi
 
-process_scripts FinalScripts
+log_message "CloseListBeforeFinalScripts: $closeListBeforeFinalScripts"
+
+# If we are closing the List window before running Final Scripts
+if [[ "$closeListBeforeFinalScripts" == "true" ]]; then
+    dialog_command "quit:"
+    process_scripts FinalScripts
+else
+    process_scripts FinalScripts
+    dialog_command "quit:"
+fi
 
 #Do final script swiftDialog stuff
 #If the failList is empty, this means success
