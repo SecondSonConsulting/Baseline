@@ -814,6 +814,10 @@ function process_pkgs(){
             # The path to the PKG appears to be a URL.
             #Get the basename of the .pkg we're downloading
             pkgBasename=$(basename "$currentPKGPath")
+	    # Append ".pkg" to $pkgBasename if it does not end in ".pkg" (helpful for Microsoft permalinks)
+            if [[ "$pkgBasename" != *.pkg ]]; then
+                pkgBasename="${pkgBasename}.pkg"
+            fi
             #Set the "currentPKG" variable, this gets used as the download path as well as processed later
             currentPKG="$BaselinePackages"/"$pkgBasename"
             #Check for conflict. If there's already a PKG in the directory we're downloading to, delete it
