@@ -6,7 +6,7 @@ set -x
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="2.2.1"
+scriptVersion="2.3"
 
 # MIT License
 # 
@@ -72,7 +72,7 @@ installomatorPath="/usr/local/Installomator/Installomator.sh"
 dialogCommandFile=$(mktemp "${BaselineTempDir}/baselineDialog.XXXXXX")
 dialogJsonFile=$(mktemp "${BaselineTempDir}/baselineJson.XXXX")
 expectedDialogTeamID="PWA5E9TQ59"
-defaultWaitForTimeout=300
+defaultWaitForTimeout=600
 
 # Path to the Jamf log file
 jamfLogFile="/private/var/log/jamf.log"
@@ -603,6 +603,8 @@ function process_scripts(){
         unset jamfVerbosePID
         unset expectedMD5
         unset actualMD5
+        unset expectedSHA256
+        unset actualSHA256
         unset currentArguments
         unset currentArgumentArray
         unset currentScript
@@ -613,6 +615,8 @@ function process_scripts(){
         currentDisplayName=$($pBuddy -c "Print :${1}:${currentIndex}:DisplayName" "$BaselineConfig")
         #Set the current script name
         currentScriptPath=$($pBuddy -c "Print :${1}:${currentIndex}:ScriptPath" "$BaselineConfig")
+        #Set where we are running in the user context or root
+        asUser=$($pBuddy -c "Print :${1}:${currentIndex}:AsUser" "$BaselineConfig" 2> /dev/null)
         #Check if the defined script is a remote path
         if [[ ${currentScriptPath:0:4} == "http" ]]; then
             #Set variable to the base file name to be downloaded
@@ -656,7 +660,30 @@ function process_scripts(){
         if [[ ${currentScriptPath} == "/usr/local/bin/jamf" ]] && $showVerboseJamf ; then
             jamf_verbose_dialog "$currentDisplayName" & jamfVerbosePID=$!
         fi
-        #Check for MD5 validation
+        ##Check for SHA256 validation
+        if $pBuddy -c "Print :${1}:${currentIndex}:SHA256" "$BaselineConfig" > /dev/null 2>&1; then
+            #This script has SHA256 validation provided
+            #Read the expected SHA256 value from the profile
+            expectedSHA256=$($pBuddy -c "Print :${1}:${currentIndex}:SHA256" "$BaselineConfig")
+            #Calculate the actual SHA256 of the script
+            actualSHA256=$(shasum -a 256 "$currentScript" | awk '{ print $1 }')
+            #Evaluate whether the expected and actual SHA256 do not match
+            if [ "$actualSHA256" != "$expectedSHA256" ]; then
+                report_message "Failed Item - Script SHA256 error: $currentScriptPath - Expected $expectedSHA256 - Actual $actualSHA256"
+                # Iterate the index up one
+                currentIndex=$((currentIndex+1))
+                # Only increment the progress bar if we're processing Scripts, not InitialScripts since users won't see those
+                if [ "$1" = "Scripts" ]; then
+                    increment_progress_bar
+                fi
+                # Report the fail
+                dialog_command "listitem: title: $currentDisplayName, status: fail"
+                failList+=("$currentDisplayName")
+                # Bail this pass through the while loop and continue processing next item
+                continue
+            fi
+        fi
+        ##Check for MD5 validation
         if $pBuddy -c "Print :${1}:${currentIndex}:MD5" "$BaselineConfig" > /dev/null 2>&1; then
             #This script has MD5 validation provided
             #Read the expected MD5 value from the profile
@@ -704,7 +731,19 @@ function process_scripts(){
         fi
 
         #Call our script with our desired options. Default options first, so that they can be overriden by "currentArguments"
-        "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
+        if [[ $asUser == "true" ]]; then
+            if [[ -z "$currentUser" ]]; then
+                # If we don't have a user, we don't want to run this script
+                log_message "Script set to run asUser but no user logged in: $currentScript"
+                /usr/bin/false
+            else
+                log_message "Running Script: $currentScript as $currentUser with arguments: ${currentArgumentArray[@]}"
+                /bin/launchctl asuser "$currentUserUID" sudo -u "$currentUser" "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
+            fi
+        else
+            log_message "Running Script: $currentScript as root with arguments: ${currentArgumentArray[@]}"
+            "$currentScript" ${currentArgumentArray[@]} >> "$ScriptOutputLog" 2>&1
+        fi
         scriptExitCode=$?
         if [ $scriptExitCode != 0 ]; then
             report_message "Failed Item - Script runtime error: $currentScript - Exit Code: $scriptExitCode"
@@ -751,8 +790,10 @@ function process_pkgs(){
         unset currentPKGPath
         unset expectedTeamID
         unset expectedMD5
-        unset actualTeamID
         unset actualMD5
+        unset expectedSHA256
+        unset actualSHA256
+        unset actualTeamID
         unset currentArguments
         unset currentArgumentArray
         unset currentDisplayName
@@ -838,6 +879,13 @@ function process_pkgs(){
             #This pkg does not have TeamID Validation defined
             expectedTeamID=""
         fi
+        if $pBuddy -c "Print :Packages:${currentIndex}:SHA256" "$BaselineConfig" > /dev/null 2>&1; then
+            #This script has SHA256 defined
+            expectedSHA256=$($pBuddy -c "Print :Packages:${currentIndex}:SHA256" "$BaselineConfig")
+        else
+            #This script does not have SHA256 defined
+            expectedSHA256=""
+        fi
         if $pBuddy -c "Print :Packages:${currentIndex}:MD5" "$BaselineConfig" > /dev/null 2>&1; then
             #This script has MD5 defined
             expectedMD5=$($pBuddy -c "Print :Packages:${currentIndex}:MD5" "$BaselineConfig")
@@ -871,6 +919,28 @@ function process_pkgs(){
             fi
         fi
         
+        # Check SHA256, if a value has been provided
+        if [ -n "$expectedSHA256" ]; then
+            #Get SHA256 for the current PKG
+            actualSHA256=$(shasum -a 256 "$currentPKG" | awk '{ print $1 }')
+            # Check if actual does not match expected
+            if [ "$expectedSHA256" != "$actualSHA256" ]; then
+                report_message "Failed Item - Package SHA256 error: $currentPKG - Expected - $expectedSHA256 Actual - $actualSHA256"
+                dialog_command "listitem: title: $currentDisplayName, status: fail"
+                failList+=("$currentDisplayName")
+                # Iterate the index up one
+                currentIndex=$((currentIndex+1))
+                increment_progress_bar
+                # Report the fail
+                dialog_command "listitem: title: $currentDisplayName, status: fail"
+                update_tracker $currentDisplayName 99
+                # Bail this pass through the while loop and continue processing next item
+                continue
+            else
+                log_message "SHA256 of PKG validated: $currentPKG $expectedSHA256"
+            fi
+        fi
+
         # Check MD5, if a value has been provided
         if [ -n "$expectedMD5" ]; then
             #Get MD5 for the current PKG
@@ -1340,19 +1410,6 @@ function process_wait_for_items(){
     else
         debug_message "WaitFor values found. Initiating WaitFor"
     fi
-    
-    # Clear any text off the progress bar
-    set_progressbar_text " "
-
-    # Check for a custom "WaitForTimeout" value
-    waitForTimeoutSetting=$($pBuddy -c "Print :WaitForTimeout" "$BaselineConfig" 2> /dev/null )
-
-    # If the "WaitForTimeout" value is an integer, set our timeout to that. Otherwise, set to default.
-    if [[ "${waitForTimeoutSetting}" =~ '^[0-9]+$' ]] ; then
-        waitForTimeout="${waitForTimeoutSetting}"
-    else
-        waitForTimeout="${defaultWaitForTimeout}"    
-    fi
 
     # Initiate empty arrays
     waitForPaths=()
@@ -1367,18 +1424,14 @@ function process_wait_for_items(){
         waitForDisplayNames+=$("$pBuddy" -c "Print WaitFor:${waitCount}:DisplayName" "$BaselineConfig")
         waitCount=$(( waitCount + 1 ))
     done
-
+    
     # Put all of our WaitFor items into spinny wait mode
-    for waitForDisplayName in "${waitForDisplayNames[@]}"; do
-        dialog_command "listitem: title: $waitForDisplayName, status: wait"
-    done
+    #for waitForDisplayName in "${waitForDisplayNames[@]}"; do
+    #   dialog_command "listitem: title: $waitForDisplayName, status: wait"
+    #done
 
-    # Set the time at which we'll stop waiting for items by getting the date now and adding the seconds for our deadline
-    waitForDateNow=$(date +%s)
-    waitForDeadline=$(( waitForDateNow + waitForTimeout ))
-
-    # While we still have paths we're waiting for AND we haven't past our deadline
-    while [ -n "$waitForPaths" ] && [[ $(date +%s) -lt $waitForDeadline ]]; do
+    # While we still have paths we're waiting for
+    while [ -n "$waitForPaths" ] ; do
         # Check for each path in our Paths array, and see if it exists yet
         for waitPath in "${waitForPaths[@]}"; do
             # If our item exists
@@ -1406,19 +1459,6 @@ function process_wait_for_items(){
         sleep 2
     done
 
-    # If we've gotten here, we're either done with all WaitFor items or we've timed out
-    # If we still have WaitFor items, then we need to mark them as failures.
-    if [ -n "$waitForDisplayNames" ]; then
-        debug_message "Failed WaitFor Paths: ${waitForPaths[@]}"
-        for failedWaitDisplayName in "${waitForDisplayNames[@]}"; do
-            report_message "Failed Item - WaitFor: $failedWaitDisplayName"
-            failList+=("$failedWaitDisplayName")
-            dialog_command "listitem: title: $failedWaitDisplayName, status: fail"
-            increment_progress_bar
-        done
-    else
-        report_message "WaitFor - All items successful"
-    fi
 
 }
 
@@ -1826,7 +1866,7 @@ build_dialog_list_options
 #Create our initial Dialog Window. Do this in an "until" loop, and attempts 10 times before exiting in case it fails to launch for some reason
 dialogAttemptCount=1
 if ! $silentModeEnabled; then
-    until pgrep -q -x "Dialog"; do
+    until pgrep -q -f "$dialogAppPath.* --commandfile $dialogCommandFile --jsonfile $dialogJsonFile"; do
         if [ "$dialogAttemptCount" -le 10 ]; then
             ${finalListCommand[@]} \
             --commandfile "$dialogCommandFile" \
@@ -1851,46 +1891,111 @@ fi
 # Check Bail Out configuration
 check_bail_out_configuration
 
+## Setup WaitFor loop
+# Check for a custom "WaitForTimeout" value
+waitForTimeoutSetting=$($pBuddy -c "Print :WaitForTimeout" "$BaselineConfig" 2> /dev/null )
+# If the "WaitForTimeout" value is an integer, set our timeout to that. Otherwise, set to default.
+if [[ "${waitForTimeoutSetting}" =~ '^[0-9]+$' ]] ; then
+    waitForTimeout="${waitForTimeoutSetting}"
+else
+    waitForTimeout="${defaultWaitForTimeout}"    
+fi
+# Set the time at which we'll stop waiting for items by getting the date now and adding the seconds for our deadline
+waitForDateNow=$(date +%s)
+waitForDeadline=$(( waitForDateNow + waitForTimeout ))
+
+process_wait_for_items & waitForPID=$!
+
+# Process Items
 process_installomator_labels
 
 process_pkgs
 
 process_scripts Scripts
 
-process_wait_for_items
+# Clear any text off the progress bar
+set_progressbar_text " "
 
-#Check if we have a custom Dialog.app icon waiting to process. If yes, reinstall dialog (unless config says to skip it)
-forceDialogReinstallSetting=$($pBuddy -c "Print ReinstallDialog" "$BaselineConfig" 2> /dev/null)
+# Starting WaitFor mode
+# Initiate empty arrays
+waitForPaths=()
+waitForDisplayNames=()
+failedWaitDisplayNames=()
 
-# If the configuration set ReinstallDialog to false
-if  [[ "$forceDialogReinstallSetting" == "false" ]]; then
-    forceDialogReinstall="false"
-# If the configuration set ReinstallDialog to true
-elif  [[ "$forceDialogReinstallSetting" == "true" ]]; then
-    forceDialogReinstall="true"
-# If the configuration did not incluse ReinstallDialog, but we found a custom icon
-elif  [ -e "/Library/Application Support/Dialog/Dialog.png" ]; then
-    forceDialogReinstall="true"
-else
-    forceDialogReinstall="false"
+# This is our index as we build our arrays
+waitCount=0
+
+# Put all Paths/DisplayNames into our arrays
+while "$pBuddy" -c "Print WaitFor:${waitCount}:Path" "$BaselineConfig" > /dev/null 2>&1; do
+    waitForPaths+=$("$pBuddy" -c "Print WaitFor:${waitCount}:Path" "$BaselineConfig")
+    waitForDisplayNames+=$("$pBuddy" -c "Print WaitFor:${waitCount}:DisplayName" "$BaselineConfig")
+    waitCount=$(( waitCount + 1 ))
+done
+
+# If the wait_for_items function is still running OR we haven't reached our deadline, then sleep a bit
+until ! ps -p $waitForPID > /dev/null || [[ $(date +%s) -gt "${waitForDeadline}" ]]; do
+    # Wait for the process to finish
+    sleep 2
+done
+
+if ps -p $waitForPID > /dev/null; then
+    # If we're here, we've reached our deadline and the WaitFor items are still running
+    # Kill the process
+    kill $waitForPID
+    report_message "WaitFor items timed out with items remaining after $waitForTimeout seconds"
 fi
 
-# Check if there is a custom Dialog icon and/or if we are going to reinstall
-# Must be skipped if SilentMode is enabled
-if $forceDialogReinstall && ! $silentModeEnabled; then
-    dialog_command "listitem: add, title: Finishing up"
-    dialog_command "listitem: Finishing up: wait"
-    rm_if_exists "$dialogAppPath"
-    install_dialog
-    dialog_command "listitem: Finishing up: success"
+# If we have WaitFor paths
+if [ -n "$waitForPaths" ] ; then
+    # Check for each path in our Paths array, and see if it exists yet
+    for waitPath in "${waitForPaths[@]}"; do
+        # If our item does not exists
+        if [ ! -e "$waitPath" ]; then
+            # Find what index in our array the current item belongs to
+            indexItemOfFail="${waitForPaths[(Ie)${waitPath}]}"
+            # As long as that index is not zero
+            if [ "$indexItemOfFail" != 0 ]; then
+                # Mark the item as failed
+                failedWaitDisplayName="${waitForDisplayNames[${indexItemOfFail}]}"
+                report_message "Failed Item - WaitFor: $failedWaitDisplayName"
+                failList+=("$failedWaitDisplayName")
+                dialog_command "listitem: title: $failedWaitDisplayName, status: fail"
+            fi
+        fi
+    done
+fi
+
+if [ -n "$failedWaitDisplayNames" ]; then
+    report_message "One or more failed WaitFor items: $failedWaitDisplayNames"
+fi
+
+# Set custom Dialog icon if it exists
+if [ -e "/Library/Application Support/Dialog/Dialog.png" ]; then
+    log_message "Custom Dialog icon found. Applying it."
+    "/Library/Application Support/Dialog/Dialog.app/Contents/MacOS/Dialog" --seticon "/Library/Application Support/Dialog/Dialog.png"
 fi
 
 if [ "$dryRun" = true ]; then
     sleep 5
 fi
 
-#Close our running dialog window
-dialog_command "quit:"
+# Check if we are closing the list window before running Final Scripts
+if $pBuddy -c "Print :CloseListBeforeFinalScripts" "$BaselineConfig" > /dev/null 2>&1; then
+    closeListBeforeFinalScripts=$($pBuddy -c "Print :CloseListBeforeFinalScripts" "$BaselineConfig")
+else
+    closeListBeforeFinalScripts="false"
+fi
+
+log_message "CloseListBeforeFinalScripts: $closeListBeforeFinalScripts"
+
+# If we are closing the List window before running Final Scripts
+if [[ "$closeListBeforeFinalScripts" == "true" ]]; then
+    dialog_command "quit:"
+    process_scripts FinalScripts
+else
+    process_scripts FinalScripts
+    dialog_command "quit:"
+fi
 
 #Do final script swiftDialog stuff
 #If the failList is empty, this means success
