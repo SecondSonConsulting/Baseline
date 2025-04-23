@@ -816,6 +816,10 @@ function process_pkgs(){
             pkgBasename=$(basename "$currentPKGPath")
             #Set the "currentPKG" variable, this gets used as the download path as well as processed later
             currentPKG="$BaselinePackages"/"$pkgBasename"
+	    # Append .pkg to $pkgBasename if it does not end with .pkg
+            if [[ "$pkgBasename" != *.pkg ]]; then
+                pkgBasename="${pkgBasename}.pkg"
+            fi
             #Check for conflict. If there's already a PKG in the directory we're downloading to, delete it
             rm_if_exists "$currentPKG"
             #Perform the download of the remote pkg
