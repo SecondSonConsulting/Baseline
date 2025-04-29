@@ -10,7 +10,7 @@
                     "DisplayName": {
                         "type": "string",
                         "title": "Display Name",
-                        "description": "The name you want to appear SwiftDialog and logs. Initial Scripts will only be shown to the user if the item Fails."
+                        "description": "The name you want to appear in SwiftDialog and logs. Initial Scripts will only be shown to the user if the item Fails."
                     },
                     "ScriptPath": {
                         "type": "string",
@@ -256,7 +256,7 @@
         "WaitForTimeout": {
             "type": "integer",
             "title": "WaitFor Timeout",
-            "description": "When using WaitFor, enter the number of seconds you wish to wait before Baseline considers remaining items a failure. This timer does not start until all other items are processed. Default 300.",
+            "description": "When using WaitFor, enter the number of seconds you wish to wait before Baseline considers remaining items a failure. This timer does not start until all other items are processed. Default if key is omitted is 600.",
             "property_order": 35
         },
         "Restart": {
