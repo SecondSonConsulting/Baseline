@@ -5,6 +5,10 @@ set -x
 #   Written by Trevor Sysock of Second Son Consulting
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
+#
+#   Contributions by Vince Mascoli of Foundation Technologies
+#   @PinkShellos on the MacAdmins Slack
+#   vince@fndtn.com
 
 scriptVersion="2.3"
 
@@ -112,7 +116,7 @@ function make_directory(){
 #Used only for debugging. Gives feedback into standard out if verboseMode=1, also to $logFile if you set it
 function debug_message(){
     if [ "$verboseMode" = 1 ]; then
-    	/bin/echo "DEBUG: $*"
+        /bin/echo "DEBUG: $*"
     fi
 }
 
@@ -128,8 +132,8 @@ function rotate_logs(){
     if [ "$(wc -l < "$logFile" | xargs)" -ge 30000 ]; then
         log_message "Rotating Logs"
         mv "$logFile" "$logFile".old
-	    touch "$logFile"
-	    log_message "Logfile Rotated"
+        touch "$logFile"
+        log_message "Logfile Rotated"
     fi
 }
 
@@ -545,39 +549,39 @@ function build_dialog_array(){
         currentDisplayName=$($pBuddy -c "Print :$configKey:${index}:DisplayName" "$BaselineConfig")
         dialogList+="$currentDisplayName"
 
-		#Get the icon path if populated in the configuration profile
+        #Get the icon path if populated in the configuration profile
         if $pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig" > /dev/null 2>&1; then
-			currentIconPath=$($pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig")
-			# Check if Icon is remotely hosted URL
+            currentIconPath=$($pBuddy -c "Print :$configKey:${index}:Icon" "$BaselineConfig")
+            # Check if Icon is remotely hosted URL
             if [[ ${currentIconPath:0:4} == "http" ]]; then
                 log_message "Icon set to URL: $currentIconPath"
             # Check if Icon is an SF Symbol
-			elif [[ ${currentIconPath:0:3} == 'SF=' ]]; then
+            elif [[ ${currentIconPath:0:3} == 'SF=' ]]; then
                 log_message "Icon set to SF Symbol: $currentIconPath"
-			#Check of the given icon path exists on disk
-			elif [ -e "$currentIconPath" ]; then
-				log_message "Icon found: $currentIconPath"
-			elif [ -e "$BaselineTempIconsDir/$currentIconPath" ]; then
-				log_message "Icon found: $currentIconPath"
+            #Check of the given icon path exists on disk
+            elif [ -e "$currentIconPath" ]; then
+                log_message "Icon found: $currentIconPath"
+            elif [ -e "$BaselineTempIconsDir/$currentIconPath" ]; then
+                log_message "Icon found: $currentIconPath"
                 currentIconPath="$BaselineTempIconsDir/$currentIconPath"
                 chmod 655 "${currentIconPath}"
-			else
+            else
                 #If we can't find the local file, report and leave blank
                 log_message "ERROR: Icon key cannot be located: $currentIconPath"
                 currentIconPath=""
             fi
-		else
-			#If no icon key is set, ensure it's blank
-			currentIconPath=""
-		fi
+        else
+            #If no icon key is set, ensure it's blank
+            currentIconPath=""
+        fi
         
-		#Get the desired subtitle if populated in the configuration profile
+        #Get the desired subtitle if populated in the configuration profile
         if $pBuddy -c "Print :$configKey:${index}:Subtitle" "$BaselineConfig" > /dev/null 2>&1; then
-			currentSubtitle=$($pBuddy -c "Print :$configKey:${index}:Subtitle" "$BaselineConfig")
-		else
-			#If no icon key is set, ensure it's blank
-			currentSubtitle=""
-		fi
+            currentSubtitle=$($pBuddy -c "Print :$configKey:${index}:Subtitle" "$BaselineConfig")
+        else
+            #If no icon key is set, ensure it's blank
+            currentSubtitle=""
+        fi
         
         #Generate JSON entry for item
         #NOTE: We will strip out the final comma later to ensure a valid JSON
@@ -964,7 +968,7 @@ function process_pkgs(){
         fi
 
         ## The package installation happens here. We do this in a variable so we can capture the output and report it for debugging
-	    pkgInstallerOutput=$(installer -allowUntrusted -pkg "$currentPKG" -target / ${currentArgumentArray[@]} )
+        pkgInstallerOutput=$(installer -allowUntrusted -pkg "$currentPKG" -target / ${currentArgumentArray[@]} )
         # Capture the installer exit code
         pkgExitCode=$?
         # Verify the install completed successfully
@@ -1283,13 +1287,15 @@ function update_tracker(){
     fi
 }
 
-function check_silent_option(){
-    # If silentMode hasn't been set yet, check if its in our configuration file.
-    if [ -z "$silentModeEnabled" ]; then
+function check_runmode_option(){
+    # checks if either silent mode or loginwindow mode are set in configuration file
+    if [ -z "$silentModeEnabled" ] || [ -z "$loginWindowMode" ]; then
         # This will exit empty if the key does not exist.
         silentModeEnabled=$($pBuddy -c "Print :SilentMode" "$BaselineConfig" 2> /dev/null )
+        loginWindowModeEnabled=$($pBuddy -c "Print :LoginWindowMode" "$BaselineConfig" 2> /dev/null )
     fi
 
+    # Check silent mode enabled
     if [ -z $silentModeEnabled ]; then
         log_message "No SilentMode key in configuration file"
         silentModeEnabled="false"
@@ -1304,53 +1310,137 @@ function check_silent_option(){
         silentModeEnabled="false"
     fi
 
-    configure_silent_mode
+    # Check loginwindow mode enabled
+    if [ -z $loginWindowModeEnabled ]; then
+        log_message "No LoginWindowMode key in configuration file"
+        loginWindowModeEnabled="false"
+    elif [[ "$loginWindowModeEnabled" == "true" ]]; then
+        log_message "LoginWindowMode set to true"
+        loginWindowModeEnabled=true
+    elif [[ "$loginWindowModeEnabled" == "false" ]]; then
+        log_message "LoginWindowMode set to false from configuration file"
+        loginWindowModeEnabled="false"
+    else
+        log_message "Invalid value for LoginWindowMode key. Setting to default. Invalid Key Value: $loginWindowModeEnabled"
+        loginWindowModeEnabled="false"
+    fi
+
+    configure_runmode_setting
 }
 
-function configure_silent_mode(){
-    # If silentMode is enabled, rewrite all functions which use SwiftDialog to `true`
-    # This effectively takes SwiftDialog entirely out of use.
-    if $silentModeEnabled; then
-        
-        dialogPath=true
-        dialogAppPath="/System/Applications"
+function configure_runmode_setting(){
+    # Check for invalid configuration (both silent and loginwindow set true)
+    if [ "$silentModeEnabled" = "true" ] && [ "$loginWindowModeEnabled" = "true" ]; then
+        cleanup_and_exit 1 "**WARNING** Invalid configuration: SilentMode and LoginWindowMode keys cannot both be set to true."
+    fi
 
-        function dialog_command(){
-            true
+    if [ "$silentModeEnabled" = "true" ]; then
+        function initiate_runmode(){
+            # If silentMode is enabled, rewrite all functions which use SwiftDialog to `true`
+            # This effectively takes SwiftDialog entirely out of use.
+            if $silentModeEnabled; then
+
+                dialogPath=true
+                dialogAppPath="/System/Applications"
+
+                function dialog_command(){
+                    true
+                }
+
+                function install_dialog(){
+                    true
+                }
+
+                function build_dialog_json_file(){
+                    true
+                }
+
+                function build_dialog_list_options(){
+                    true
+                }
+
+                function increment_progress_bar(){
+                    true
+                }
+
+                function set_progressbar_text(){
+                    true
+                }
+
+                function present_failure_window(){
+                    true
+                }
+
+                function present_success_window(){
+                    true
+                }
+
+            fi
         }
+    elif [ "$loginWindowMode" = "true" ]; then
+        # create loginwindow launch agent and command script
+        function initiate_runmode(){
+            echo "$AGENTDATA"  > "$BaselineLaunchAgent"
+            /usr/bin/touch "$LoginWindowCommandScript"
+            chmod +x "$LoginWindowCommandScript"
+            log_message "Created loginwindow launch agent and loginwindow command script file."
 
-        function install_dialog(){
-            true
+            # Loginwindow Mode, wait for the loginwindow user
+            #Set our test to false
+            verifiedUser="false"
+
+            #Loop until user is found
+            while [ "$verifiedUser" = "false" ]; do
+                #Get currently logged in user
+                currentUser=$( echo "show State:/Users/ConsoleUser" | scutil | awk '/Name :/ { print $3 }' )
+                #Verify the current user is not root or _mbsetupuser
+                if [ "$currentUser" = "root" ] \
+                    || [ "$currentUser" = "_mbsetupuser" ] \
+                    || [ -z "$currentUser" ]
+                then
+                    #If we aren't verified yet, wait 1 second and try again
+                    sleep 1
+                else
+                    log_message "Loginwindow user detected."
+                    verifiedUser="true"
+                    loginWindowMode="true"
+                fi
+            debug_message "Disabling verbose output to prevent logspam while waiting for user at timestamp: $(date +%s)"
+            set +x
+            done
+            debug_message "Re-enabling verbose output after finding loginwindow user at timestamp: $(date +%s)"
         }
+    else
+        # Default behavior. Checks if a user is logged in yet, and if not it waits and loops until we can confirm there is a real user
+        function initiate_runmode(){
+            #Set our test to false
+            verifiedUser="false"
 
-        function wait_for_user(){
-            true
+            #Loop until user is found
+            while [ "$verifiedUser" = "false" ]; do
+                #Get currently logged in user
+                currentUser=$( echo "show State:/Users/ConsoleUser" | scutil | awk '/Name :/ { print $3 }' )
+                #Verify the current user is not root, loginwindow, or _mbsetupuser
+                if [ "$currentUser" = "root" ] \
+                    || [ "$currentUser" = "loginwindow" ] \
+                    || [ "$currentUser" = "_mbsetupuser" ] \
+                    || [ -z "$currentUser" ]
+                then
+                #If we aren't verified yet, wait 1 second and try again
+                sleep 1
+                else
+                    #Logged in user found, but continue the loop until Dock and Finder processes are running
+                    if pgrep -q "dock" && pgrep -q "Finder"; then
+                        uid=$(id -u "$currentUser")
+                        log_message "Verified User is logged in: $currentUser UID: $uid"
+                        verifiedUser="true"
+                    fi
+                fi
+            debug_message "Disabling verbose output to prevent logspam while waiting for user at timestamp: $(date +%s)"
+            set +x
+            done
+            debug_message "Re-enabling verbose output after finding user at timestamp: $(date +%s)"
         }
-
-        function build_dialog_json_file(){
-            true
-        }
-
-        function build_dialog_list_options(){
-            true
-        }
-
-        function increment_progress_bar(){
-            true
-        }
-
-        function set_progressbar_text(){
-            true
-        }
-
-        function present_failure_window(){
-            true
-        }
-
-        function present_success_window(){
-            true
-        }
-
     fi
 }
 
@@ -1535,6 +1625,10 @@ while [ ! -z "$1" ]; do
         -t|--tracker)
             useTracker=true
             ;;
+        -l|--loginwindow)
+            log_message "Setting Login Window Mode from Command-Line"
+            loginWindowEnabled=true
+            ;;
         *)
             cleanup_and_exit 82 "Unknown argument: $1"
             ;;
@@ -1552,7 +1646,7 @@ done
 #   Verify a Configuration File is in Place #
 #############################################
 verify_configuration_file
-check_silent_option
+check_runmode_option
 initiate_tracker_file
 
 #############################################
@@ -1595,7 +1689,7 @@ fi
 #############################################
 #   Wait until a user is verified logged in #
 #############################################
-wait_for_user
+initiate_runmode
 
 # Get the currently logged in user home folder and UID
 currentUser=$( echo "show State:/Users/ConsoleUser" | scutil | awk '/Name :/ { print $3 }' )
@@ -1633,6 +1727,7 @@ progressBarTotal=0
 # Initiate bools
 showProgressBar="false"
 progressBarDisplayNames="false"
+loginWindowMode="false"
 
 ##############################
 #   Process Initial Scripts  #
@@ -1664,7 +1759,7 @@ check_progress_options
 copy_icons_dir
 
 #####################################
-#   Initiate Dialog Option Arays    #
+#   Initiate Dialog Option Arrays    #
 #####################################
 
 finalListCommand=()
@@ -1758,6 +1853,10 @@ if [ "$progressBarDisplayNames" = "true" ]; then
     configure_dialog_list_arguments "--progresstext" ' '
 fi
 
+if [ "$loginWindowMode" = "true" ]; then
+    finalListCommand+="--loginwindow"
+fi
+
 #########################################
 #   Configure Success Customizations    #
 #########################################
@@ -1800,6 +1899,10 @@ if $forceRestart; then
     configure_dialog_success_arguments "--timer" "120"
 else
     configure_dialog_success_arguments "--message" "Your device is ready for you."
+fi
+
+if [ "$loginWindowMode" = "true" ]; then
+    finalSuccessCommand+="--loginwindow"
 fi
 
 
@@ -1845,6 +1948,9 @@ if $forceRestart; then
     configure_dialog_failure_arguments "--timer" "120"
 fi
 
+if [ "$loginWindowMode" = "true" ]; then
+    finalFailureCommand+="--loginwindow"
+fi
 
 ###################
 #   Build Arrays  #
