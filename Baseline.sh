@@ -741,9 +741,22 @@ function build_dialog_array(){
     done
 }
 
+function bail_on_item_failure(){
+# Called when an item has BailOnFailure set to true and has failed after max retries.
+# failList, dialog_status, and update_tracker must all be called before this function.
+# present_failure_window is a no-op at the PreflightScripts stage (finalFailureCommand
+# not yet built), so bail exits cleanly but without a Dialog window at that stage.
+    report_message "BailOnFailure triggered by: ${1}"
+    present_failure_window
+    cleanup_and_restart 99 "BailOnFailure: exiting after failure of: ${1}"
+}
+
 function process_scripts(){
 # Usage: process_scripts ProfileKey
 # Actual use: process_scripts [ PreflightScripts | InitialScripts | Scripts | FinalScripts ]
+# NOTE: PreflightScripts run before SwiftDialog and Installomator are installed, and before
+# any user is logged in. Dialog status calls are safe (they write to the command file that
+# nobody is reading yet) but AsUser:true will always fail at this stage.
     #Set an index internal to this function
     currentIndex=0
     #Loop through and test if there is a value in the slot of this index for the given array
@@ -763,6 +776,7 @@ function process_scripts(){
         local currentScriptPath
         local currentDisplayName
         local scriptDownloadExitCode
+        local bailOnFailure
         #Get the display name of the label we're installing. We need this to update the dialog list
         currentDisplayName=$($pBuddy -c "Print :${1}:${currentIndex}:DisplayName" "$BaselineConfig")
         #Set the current script name
@@ -946,12 +960,18 @@ function process_scripts(){
             report_message "Failed Item - Script runtime error: $currentScript after $currentAttemptCount attempts - Exit Code: $scriptExitCode"
             dialog_status "$currentDisplayName" "${currentStatusIconFail}"
             failList+=("$currentDisplayName")
+            update_tracker $currentDisplayName $scriptExitCode
+            # Check if this item is configured to bail Baseline on failure
+            bailOnFailure=$($pBuddy -c "Print :${1}:${currentIndex}:BailOnFailure" "$BaselineConfig" 2> /dev/null)
+            if [[ "$bailOnFailure" == "true" ]]; then
+                bail_on_item_failure "$currentDisplayName"
+            fi
         else
             report_message "Successful Item - Script: $currentScript"
             dialog_status "$currentDisplayName" "${currentStatusIconSuccess}"
             successList+=("$currentDisplayName")
+            update_tracker $currentDisplayName $scriptExitCode
         fi
-        update_tracker $currentDisplayName $scriptExitCode
 
        #Iterate index for next loop
         currentIndex=$((currentIndex+1))
@@ -1923,6 +1943,29 @@ check_silent_option
 initiate_tracker_file
 check_exit_condition
 
+################################
+#   Run Preflight Scripts       #
+################################
+# PreflightScripts run before SwiftDialog and Installomator are installed, before wait_for_user,
+# and before the Dialog list window is built. They are not shown in the Dialog list view.
+#
+# These support the same keys as InitialScripts: ScriptPath, Arguments, SHA256, MD5, Retries, CurlOptions.
+# AsUser is parsed but will always produce a failure; do not use it in PreflightScripts.
+
+# set_default_retry_values and check_bail_out_configuration are called here
+# (they are also called again before InitialScripts after any config-swap)
+# Initialize fail/success lists before PreflightScripts so that failures at this stage
+# are preserved through the array initialization block that runs later (post-user-login).
+failList=()
+successList=()
+
+set_default_retry_values
+check_bail_out_configuration
+process_scripts PreflightScripts
+
+#Check if a custom plist was delivered during PreflightScripts
+check_for_custom_plist
+
 #############################################
 #   Configure Default Installomator Options #
 #############################################
@@ -1980,9 +2023,6 @@ userHomeFolder=$(dscl . -read /users/${currentUser} NFSHomeDirectory | cut -d " 
 dialogList=()
 dialogListItems=()
 dialogListJson=()
-failList=()
-successList=()
-
 installomatorLabels=()
 installomatorOptions=()
 
