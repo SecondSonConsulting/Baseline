@@ -743,26 +743,26 @@ function build_dialog_array(){
 
 function process_scripts(){
 # Usage: process_scripts ProfileKey
-# Actual use: process_scripts [ InitialScripts | Scripts ]
+# Actual use: process_scripts [ PreflightScripts | InitialScripts | Scripts | FinalScripts ]
     #Set an index internal to this function
     currentIndex=0
     #Loop through and test if there is a value in the slot of this index for the given array
     #If this command fails it means we've reached the end of the array in the config file (or there are none) and we exit our loop
     while $pBuddy -c "Print :${1}:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
         check_for_bail_out
-        #Unset variables for next loop
-        unset useVerboseJamf
-        unset jamfVerbosePID
-        unset expectedMD5
-        unset actualMD5
-        unset expectedSHA256
-        unset actualSHA256
-        unset currentArguments
-        unset currentArgumentArray
-        unset currentScript
-        unset currentScriptPath
-        unset currentDisplayName
-        unset scriptDownloadExitCode
+        # Local vars
+        local useVerboseJamf
+        local jamfVerbosePID
+        local expectedMD5
+        local actualMD5
+        local expectedSHA256
+        local actualSHA256
+        local currentArguments
+        local currentArgumentArray
+        local currentScript
+        local currentScriptPath
+        local currentDisplayName
+        local scriptDownloadExitCode
         #Get the display name of the label we're installing. We need this to update the dialog list
         currentDisplayName=$($pBuddy -c "Print :${1}:${currentIndex}:DisplayName" "$BaselineConfig")
         #Set the current script name
@@ -959,7 +959,7 @@ function process_scripts(){
         # This gets set for use with the BailOut feature
         previousDisplayName="$currentDisplayName"
 
-        #Stuff in this section only happens if we're processing Scripts and not InitialScripts
+        #Stuff in this section only happens if we're processing "Scripts" and not any other Script Type
         if [ "$1" = "Scripts" ]; then
             increment_progress_bar
             #If we're using jamf, and jamf verbose is configured
@@ -983,20 +983,20 @@ function process_pkgs(){
     #If this command fails it means we've reached the end of the array in the config file (or there are none) and we exit our loop
     while $pBuddy -c "Print :Packages:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
         check_for_bail_out
-        # Unset variables for next loop
-        unset currentPKG
-        unset currentPKGPath
-        unset expectedTeamID
-        unset expectedMD5
-        unset actualMD5
-        unset expectedSHA256
-        unset actualSHA256
-        unset actualTeamID
-        unset currentArguments
-        unset currentArgumentArray
-        unset currentDisplayName
-        unset pkgBasename
-        unset downloadResult
+        # Local vars
+        local currentPKG
+        local currentPKGPath
+        local expectedTeamID
+        local expectedMD5
+        local actualMD5
+        local expectedSHA256
+        local actualSHA256
+        local actualTeamID
+        local currentArguments
+        local currentArgumentArray
+        local currentDisplayName
+        local pkgBasename
+        local downloadResult
 
         #Get the display name of the label we're installing. We need this to update the dialog list
         currentDisplayName=$($pBuddy -c "Print :Packages:${currentIndex}:DisplayName" "$BaselineConfig")
