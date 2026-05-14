@@ -755,10 +755,12 @@ function write_bailout_log(){
 #        bail file was detected (may be empty if no item had run yet at detection time)
 #   $2 - exit code of the failing item (or 99 for BailOutFile triggers)
 #   $3 - script stage at time of bail (e.g. PreflightScripts, Scripts, BailOutFile)
+#   $4 - index of the item in the config array (may be empty for BailOutFile triggers)
 
 	local triggerItem="${1}"
 	local exitCode="${2}"
 	local stage="${3}"
+	local itemIndex="${4}"
 
 	# Build a human-readable fail list for the log
 	local failListReadable
@@ -775,6 +777,7 @@ function write_bailout_log(){
 		echo "Baseline Version: $scriptVersion"
 		echo "Stage:           $stage"
 		echo "Trigger Item:    $triggerItem (last completed item for BailOutFile; failed item for BailOnFailure)"
+		echo "Item Index:      ${stage}:${itemIndex}"
 		echo "Exit Code:       $exitCode"
 		echo "Config File:     $BaselineConfig"
 		echo ""
@@ -797,7 +800,7 @@ function bail_on_item_failure(){
 # write_bailout_log is called here before present_failure_window so the log exists
 # even if Dialog is not yet available (e.g. PreflightScripts stage).
     report_message "BailOnFailure triggered by: ${1}"
-    write_bailout_log "${1}" "${2}" "${3}"
+    write_bailout_log "${1}" "${2}" "${3}" "${4}"
     present_failure_window
     cleanup_and_restart 99 "BailOnFailure: exiting after failure of: ${1}"
 }
@@ -1015,7 +1018,7 @@ function process_scripts(){
             # Check if this item is configured to bail Baseline on failure
             bailOnFailure=$($pBuddy -c "Print :${1}:${currentIndex}:BailOnFailure" "$BaselineConfig" 2> /dev/null)
             if [[ "$bailOnFailure" == "true" ]]; then
-                bail_on_item_failure "$currentDisplayName" "$scriptExitCode" "${1}"
+                bail_on_item_failure "$currentDisplayName" "$scriptExitCode" "${1}" "$currentIndex"
             fi
         else
             report_message "Successful Item - Script: $currentScript"
@@ -1373,7 +1376,7 @@ function check_for_bail_out(){
             # Delete the bail out file
             rm_if_exists "$bailOutFilePath"
             # Write the bailout log before closing Dialog or showing the failure window
-            write_bailout_log "$previousDisplayName" "99" "BailOutFile"
+            write_bailout_log "$previousDisplayName" "99" "BailOutFile" "$currentIndex"
             #Close our running dialog window
             dialog_command "quit:"
             # Do the Failure window
