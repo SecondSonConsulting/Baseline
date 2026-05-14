@@ -1071,6 +1071,7 @@ function process_pkgs(){
         local currentDisplayName
         local pkgBasename
         local downloadResult
+        local bailOnFailure
 
         #Get the display name of the label we're installing. We need this to update the dialog list
         currentDisplayName=$($pBuddy -c "Print :Packages:${currentIndex}:DisplayName" "$BaselineConfig")
@@ -1291,12 +1292,18 @@ function process_pkgs(){
             report_message "Failed Item - Package installation error: $currentPKG on attempt $currentAttemptCount - Exit Code: $pkgExitCode"
             dialog_status "$currentDisplayName" "${currentStatusIconFail}"
             failList+=("$currentDisplayName")
+            update_tracker $currentDisplayName $pkgExitCode
+            # Check if this item is configured to bail Baseline on failure
+            bailOnFailure=$($pBuddy -c "Print :Packages:${currentIndex}:BailOnFailure" "$BaselineConfig" 2> /dev/null)
+            if [[ "$bailOnFailure" == "true" ]]; then
+                bail_on_item_failure "$currentDisplayName" "$pkgExitCode" "Packages" "$currentIndex"
+            fi
         else
             report_message "Successful Item - Package: $currentPKG"
             dialog_status "$currentDisplayName" "${currentStatusIconSuccess}"
             successList+=("$currentDisplayName")
+            update_tracker $currentDisplayName $pkgExitCode
         fi
-        update_tracker $currentDisplayName $pkgExitCode
         debug_message "Output of the install package command: $pkgInstallerOutput"
         # Iterate to the next index item, and continue our loop
         currentIndex=$((currentIndex+1))
