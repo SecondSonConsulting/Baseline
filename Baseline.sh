@@ -5,7 +5,7 @@
 #   @BigMacAdmin on the MacAdmins Slack
 #   trevor@secondsonconsulting.com
 
-scriptVersion="3.0"
+scriptVersion="3.0.1-beta1"
 
 # MIT License
 # 
