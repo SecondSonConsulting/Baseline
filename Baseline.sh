@@ -62,6 +62,7 @@ BaselineIcons="$BaselineDir/Icons"
 BaselineLaunchDaemon="/Library/LaunchDaemons/com.secondsonconsulting.baseline.plist"
 BaselineTempIconsDir="${BaselineTempDir}/TempIconsDir" ; mkdir "$BaselineTempIconsDir"
 ScriptOutputLog="/var/log/Baseline-ScriptsOutput.log"
+bailoutLogFile="/var/log/Baseline-Bailout.log"
 
 #Binaries
 pBuddy="/usr/libexec/PlistBuddy"
@@ -741,12 +742,62 @@ function build_dialog_array(){
     done
 }
 
+function write_bailout_log(){
+# Write a structured bailout record to $bailoutLogFile.
+# This file is intended as a machine-readable artifact for external monitoring:
+# a watcher script can detect its presence, alert, then mv or rm it to avoid
+# retriggering. The file is overwritten on each bail so it always reflects the
+# most recent event.
+#
+# Arguments:
+#   $1 - for BailOnFailure: the display name of the item that failed
+#        for BailOutFile: the display name of the last item that completed before the
+#        bail file was detected (may be empty if no item had run yet at detection time)
+#   $2 - exit code of the failing item (or 99 for BailOutFile triggers)
+#   $3 - script stage at time of bail (e.g. PreflightScripts, Scripts, BailOutFile)
+
+	local triggerItem="${1}"
+	local exitCode="${2}"
+	local stage="${3}"
+
+	# Build a human-readable fail list for the log
+	local failListReadable
+	if [[ ${#failList[@]} -gt 0 ]]; then
+		failListReadable=$(printf '  - %s\n' "${failList[@]}")
+	else
+		failListReadable="  (none)"
+	fi
+
+	# Write the record, overwriting any previous bailout log
+	{
+		echo "--- Baseline Bailout Record ---"
+		echo "Timestamp:       $(date)"
+		echo "Baseline Version: $scriptVersion"
+		echo "Stage:           $stage"
+		echo "Trigger Item:    $triggerItem (last completed item for BailOutFile; failed item for BailOnFailure)"
+		echo "Exit Code:       $exitCode"
+		echo "Config File:     $BaselineConfig"
+		echo ""
+		echo "Failed Items at time of bail:"
+		echo "$failListReadable"
+		echo ""
+		echo "--- Config File Contents ---"
+		# Print the config plist so admins have full context without needing
+		# to locate the original file (which may have been removed by cleanup)
+		$pBuddy -c Print "$BaselineConfig" 2>/dev/null || echo "(could not read config file)"
+	} > "$bailoutLogFile"
+
+	chmod 644 "$bailoutLogFile"
+	log_message "Bailout log written: $bailoutLogFile"
+}
+
 function bail_on_item_failure(){
 # Called when an item has BailOnFailure set to true and has failed after max retries.
 # failList, dialog_status, and update_tracker must all be called before this function.
-# present_failure_window is a no-op at the PreflightScripts stage (finalFailureCommand
-# not yet built), so bail exits cleanly but without a Dialog window at that stage.
+# write_bailout_log is called here before present_failure_window so the log exists
+# even if Dialog is not yet available (e.g. PreflightScripts stage).
     report_message "BailOnFailure triggered by: ${1}"
+    write_bailout_log "${1}" "${2}" "${3}"
     present_failure_window
     cleanup_and_restart 99 "BailOnFailure: exiting after failure of: ${1}"
 }
@@ -964,7 +1015,7 @@ function process_scripts(){
             # Check if this item is configured to bail Baseline on failure
             bailOnFailure=$($pBuddy -c "Print :${1}:${currentIndex}:BailOnFailure" "$BaselineConfig" 2> /dev/null)
             if [[ "$bailOnFailure" == "true" ]]; then
-                bail_on_item_failure "$currentDisplayName"
+                bail_on_item_failure "$currentDisplayName" "$scriptExitCode" "${1}"
             fi
         else
             report_message "Successful Item - Script: $currentScript"
@@ -1321,6 +1372,8 @@ function check_for_bail_out(){
             failList+=("$previousDisplayName")
             # Delete the bail out file
             rm_if_exists "$bailOutFilePath"
+            # Write the bailout log before closing Dialog or showing the failure window
+            write_bailout_log "$previousDisplayName" "99" "BailOutFile"
             #Close our running dialog window
             dialog_command "quit:"
             # Do the Failure window
