@@ -6,3 +6,4 @@ Build/.DS_Store
 TestConfig.plist
 testConfig.mobileconfig
 dialog.pkg
+/.local
