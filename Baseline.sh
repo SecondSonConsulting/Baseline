@@ -533,7 +533,7 @@ function set_current_retries() {
         currentRetries=$($pBuddy -c "Print :${1}:${currentIndex}:Retries" "$BaselineConfig")
     else
         case "$1" in
-            Packages)
+            *Packages)
                 currentRetries="$defaultPackageRetries"
                 ;;
             Installomator)
@@ -1051,11 +1051,16 @@ function process_scripts(){
 }
 
 function process_pkgs(){
+# Usage: process_pkgs ProfileKey
+# Actual use: process_pkgs [ PreflightPackages | Packages ]
+# NOTE: PreflightPackages run before SwiftDialog and Installomator are installed, and before
+# any user is logged in. Dialog status calls are safe (they write to the command file that
+# nobody is reading yet) but no Dialog window will be visible at this stage.
     #Set an index internal to this function
     currentIndex=0
     #Loop through and test if there is a value in the slot of this index for the given array
     #If this command fails it means we've reached the end of the array in the config file (or there are none) and we exit our loop
-    while $pBuddy -c "Print :Packages:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
+    while $pBuddy -c "Print :${1}:${currentIndex}" "$BaselineConfig" > /dev/null 2>&1; do
         check_for_bail_out
         # Local vars
         local currentPKG
@@ -1074,12 +1079,12 @@ function process_pkgs(){
         local bailOnFailure
 
         #Get the display name of the label we're installing. We need this to update the dialog list
-        currentDisplayName=$($pBuddy -c "Print :Packages:${currentIndex}:DisplayName" "$BaselineConfig")
+        currentDisplayName=$($pBuddy -c "Print :${1}:${currentIndex}:DisplayName" "$BaselineConfig")
         #Set the current package path
-        currentPKGPath=$($pBuddy -c "Print :Packages:${currentIndex}:PackagePath" "$BaselineConfig")
+        currentPKGPath=$($pBuddy -c "Print :${1}:${currentIndex}:PackagePath" "$BaselineConfig")
 
         ## Check for custom status icon for this item
-        set_current_list_icons Packages
+        set_current_list_icons "${1}"
 
         ##Here is where we begin checking what kind of PKG was defined, and how to process it
         ##The end result of this chunk of code, is that we have a valid path to a PKG on the file system
@@ -1100,7 +1105,7 @@ function process_pkgs(){
             rm_if_exists "$currentPKG"
 
             # Set custom curl options for this item:
-            set_current_curl_options Packages
+            set_current_curl_options "${1}"
 
             #Perform the download of the remote pkg
             curl ${curlOptions[@]} -LJs "$currentPKGPath" -o "$currentPKG"
@@ -1144,9 +1149,9 @@ function process_pkgs(){
         ##At this point, the pkg exists on the file system, or we've bailed on this loop.
 
         #Check if there are Arguments defined, and set the variable accordingly
-        if $pBuddy -c "Print :Packages:${currentIndex}:Arguments" "$BaselineConfig" > /dev/null 2>&1; then 
+        if $pBuddy -c "Print :${1}:${currentIndex}:Arguments" "$BaselineConfig" > /dev/null 2>&1; then 
             #This pkg has arguments defined
-            currentArguments=$($pBuddy -c "Print :Packages:${currentIndex}:Arguments" "$BaselineConfig")
+            currentArguments=$($pBuddy -c "Print :${1}:${currentIndex}:Arguments" "$BaselineConfig")
         else
             #This pkg does not have arguments defined
             currentArguments=""
@@ -1157,23 +1162,23 @@ function process_pkgs(){
         currentArgumentArray=()
         eval 'for argument in '$currentArguments'; do currentArgumentArray+=$argument; done'
 
-        if $pBuddy -c "Print :Packages:${currentIndex}:TeamID" "$BaselineConfig" > /dev/null 2>&1; then
+        if $pBuddy -c "Print :${1}:${currentIndex}:TeamID" "$BaselineConfig" > /dev/null 2>&1; then
             #This pkg has TeamID defined
-            expectedTeamID=$($pBuddy -c "Print :Packages:${currentIndex}:TeamID" "$BaselineConfig")
+            expectedTeamID=$($pBuddy -c "Print :${1}:${currentIndex}:TeamID" "$BaselineConfig")
         else
             #This pkg does not have TeamID Validation defined
             expectedTeamID=""
         fi
-        if $pBuddy -c "Print :Packages:${currentIndex}:SHA256" "$BaselineConfig" > /dev/null 2>&1; then
+        if $pBuddy -c "Print :${1}:${currentIndex}:SHA256" "$BaselineConfig" > /dev/null 2>&1; then
             #This script has SHA256 defined
-            expectedSHA256=$($pBuddy -c "Print :Packages:${currentIndex}:SHA256" "$BaselineConfig")
+            expectedSHA256=$($pBuddy -c "Print :${1}:${currentIndex}:SHA256" "$BaselineConfig")
         else
             #This script does not have SHA256 defined
             expectedSHA256=""
         fi
-        if $pBuddy -c "Print :Packages:${currentIndex}:MD5" "$BaselineConfig" > /dev/null 2>&1; then
+        if $pBuddy -c "Print :${1}:${currentIndex}:MD5" "$BaselineConfig" > /dev/null 2>&1; then
             #This script has MD5 defined
-            expectedMD5=$($pBuddy -c "Print :Packages:${currentIndex}:MD5" "$BaselineConfig")
+            expectedMD5=$($pBuddy -c "Print :${1}:${currentIndex}:MD5" "$BaselineConfig")
         else
             #This script does not have MD5 defined
             expectedMD5=""
@@ -1183,9 +1188,9 @@ function process_pkgs(){
         set_progressbar_text "$currentDisplayName"
 
         # Check if we need to hide/show the List View for this item
-        if $pBuddy -c "Print :Packages:${currentIndex}:HideListView" "$BaselineConfig" > /dev/null 2>&1; then
+        if $pBuddy -c "Print :${1}:${currentIndex}:HideListView" "$BaselineConfig" > /dev/null 2>&1; then
             # Hide or show is set
-            local hideListChoice="$($pBuddy -c "Print :Packages:${currentIndex}:HideListView" "$BaselineConfig")"
+            local hideListChoice="$($pBuddy -c "Print :${1}:${currentIndex}:HideListView" "$BaselineConfig")"
             if [[ "$hideListChoice" == true ]]; then
                 show_or_hide hide
             else
@@ -1261,7 +1266,7 @@ function process_pkgs(){
         fi
 
         ## Check for custom retries count for this item
-        set_current_retries Packages
+        set_current_retries "${1}"
 
         # Set variables for retries
         currentAttemptCount=0
@@ -1294,9 +1299,9 @@ function process_pkgs(){
             failList+=("$currentDisplayName")
             update_tracker $currentDisplayName $pkgExitCode
             # Check if this item is configured to bail Baseline on failure
-            bailOnFailure=$($pBuddy -c "Print :Packages:${currentIndex}:BailOnFailure" "$BaselineConfig" 2> /dev/null)
+            bailOnFailure=$($pBuddy -c "Print :${1}:${currentIndex}:BailOnFailure" "$BaselineConfig" 2> /dev/null)
             if [[ "$bailOnFailure" == "true" ]]; then
-                bail_on_item_failure "$currentDisplayName" "$pkgExitCode" "Packages" "$currentIndex"
+                bail_on_item_failure "$currentDisplayName" "$pkgExitCode" "${1}" "$currentIndex"
             fi
         else
             report_message "Successful Item - Package: $currentPKG"
@@ -2026,6 +2031,16 @@ set_default_retry_values
 check_bail_out_configuration
 process_scripts PreflightScripts
 
+################################
+#   Run Preflight Packages      #
+################################
+# PreflightPackages run immediately after PreflightScripts, before SwiftDialog and
+# Installomator are installed and before any user is logged in. Use for installing
+# a specific version of SwiftDialog or Installomator, or any other PKG that must
+# be present before Baseline's own dependency install logic runs.
+# No Dialog window is available at this stage.
+process_pkgs PreflightPackages
+
 #Check if a custom plist was delivered during PreflightScripts
 check_for_custom_plist
 
@@ -2486,7 +2501,7 @@ process_wait_for_items & waitForPID=$!
 # Process Items
 process_installomator_labels
 
-process_pkgs
+process_pkgs Packages
 
 process_scripts Scripts
 
