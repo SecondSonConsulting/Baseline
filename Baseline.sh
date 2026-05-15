@@ -1065,6 +1065,7 @@ function process_pkgs(){
         # Local vars
         local currentPKG
         local currentPKGPath
+        local configPKGPath
         local expectedTeamID
         local expectedMD5
         local actualMD5
@@ -1082,6 +1083,10 @@ function process_pkgs(){
         currentDisplayName=$($pBuddy -c "Print :${1}:${currentIndex}:DisplayName" "$BaselineConfig")
         #Set the current package path
         currentPKGPath=$($pBuddy -c "Print :${1}:${currentIndex}:PackagePath" "$BaselineConfig")
+        # Preserve the configured path (URL or local) for use in report messages.
+        # currentPKGPath may be overwritten to a local path when the package is a remote URL,
+        # so we snapshot it here before any manipulation occurs.
+        configPKGPath="$currentPKGPath"
 
         ## Check for custom status icon for this item
         set_current_list_icons "${1}"
@@ -1113,7 +1118,7 @@ function process_pkgs(){
             downloadResult=$?
             #Verify curl exited with 0
             if [ "$downloadResult" != 0 ]; then
-                report_message "Failed Item $currentDisplayName - Package download error: $currentPKGPath"
+                report_message "Failed Item $currentDisplayName - ${1} download error: $configPKGPath"
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 increment_progress_bar
@@ -1137,7 +1142,7 @@ function process_pkgs(){
             # The path to the PKG appears to exist within Baseline directory
             currentPKG="$BaselinePackages/$currentPKGPath"
         else
-            report_message "Failed Item - Package does not exist: $currentPKGPath"
+            report_message "Failed Item - ${1} does not exist: $configPKGPath"
             dialog_status "$currentDisplayName" "${currentStatusIconFail}"
             failList+=("$currentDisplayName")
             currentIndex=$((currentIndex+1))
@@ -1208,7 +1213,7 @@ function process_pkgs(){
             actualTeamID=$(spctl -a -vv -t install "$currentPKG" 2>&1 | awk -F '(' '/origin=/ {print $2 }' | tr -d ')' )
             # Check if actual does not match expected
             if [ "$expectedTeamID" != "$actualTeamID" ]; then
-                report_message "Failed Item - Package TeamID error: $currentPKG - Expected - $expectedTeamID Actual - $actualTeamID"
+                report_message "Failed Item - ${1} TeamID error: $configPKGPath - Expected - $expectedTeamID Actual - $actualTeamID"
                 failList+=("$currentDisplayName")
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
@@ -1228,7 +1233,7 @@ function process_pkgs(){
             actualSHA256=$(shasum -a 256 "$currentPKG" | awk '{ print $1 }')
             # Check if actual does not match expected
             if [ "$expectedSHA256" != "$actualSHA256" ]; then
-                report_message "Failed Item - Package SHA256 error: $currentPKG - Expected - $expectedSHA256 Actual - $actualSHA256"
+                report_message "Failed Item - ${1} SHA256 error: $configPKGPath - Expected - $expectedSHA256 Actual - $actualSHA256"
                 failList+=("$currentDisplayName")
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
@@ -1249,7 +1254,7 @@ function process_pkgs(){
             actualMD5=$(md5 -q "$currentPKG")
             # Check if actual does not match expected
             if [ "$expectedMD5" != "$actualMD5" ]; then
-                report_message "Failed Item - Package MD5 error: $currentPKG - Expected - $expectedMD5 Actual - $actualMD5"
+                report_message "Failed Item - ${1} MD5 error: $configPKGPath - Expected - $expectedMD5 Actual - $actualMD5"
                 dialog_status "$currentDisplayName" "${currentStatusIconFail}"
                 failList+=("$currentDisplayName")
                 # Iterate the index up one
@@ -1289,12 +1294,12 @@ function process_pkgs(){
             if [[ $pkgExitCode == 0 ]]; then
                 currentItemComplete="true"
             else
-                report_message "Unsuccessful attempt - Package installation error: $currentPKG on attempt $currentAttemptCount with retry count $currentRetries - Exit Code: $pkgExitCode"
+                report_message "Unsuccessful attempt - ${1} installation error: $configPKGPath on attempt $currentAttemptCount with retry count $currentRetries - Exit Code: $pkgExitCode"
             fi
         done
         # Verify the install completed successfully
         if [[ "$currentItemComplete" != "true" ]]; then
-            report_message "Failed Item - Package installation error: $currentPKG on attempt $currentAttemptCount - Exit Code: $pkgExitCode"
+            report_message "Failed Item - ${1} installation error: $configPKGPath on attempt $currentAttemptCount - Exit Code: $pkgExitCode"
             dialog_status "$currentDisplayName" "${currentStatusIconFail}"
             failList+=("$currentDisplayName")
             update_tracker $currentDisplayName $pkgExitCode
@@ -1304,7 +1309,7 @@ function process_pkgs(){
                 bail_on_item_failure "$currentDisplayName" "$pkgExitCode" "${1}" "$currentIndex"
             fi
         else
-            report_message "Successful Item - Package: $currentPKG"
+            report_message "Successful Item - ${1}: $configPKGPath"
             dialog_status "$currentDisplayName" "${currentStatusIconSuccess}"
             successList+=("$currentDisplayName")
             update_tracker $currentDisplayName $pkgExitCode
