@@ -856,7 +856,7 @@ function process_scripts(){
             #Check if curl exited cleanly
             if [ "$scriptDownloadExitCode" != 0 ];then
                 #Report a failed download
-                report_message "Failed Item: $currentDisplayName - Script download error: $currentScriptPath"
+                report_message "Failed Item: $currentDisplayName - ${1} download error: $currentScriptPath"
                 failList+=("$currentDisplayName")
                 #Rm the output of our curl command. This will result in it being processed as a failure
                 rm_if_exists "$currentScript"
@@ -874,7 +874,7 @@ function process_scripts(){
         fi
         #If the currentScript variable still isn't set to an existing file we need to bail..
         if [ ! -e "$currentScript" ]; then
-            report_message "Failed Item - Script does not exist: $currentScript"
+            report_message "Failed Item - ${1} does not exist: $currentScript"
             # Iterate the index up one
             currentIndex=$((currentIndex+1))
             increment_progress_bar
@@ -898,7 +898,7 @@ function process_scripts(){
             actualSHA256=$(shasum -a 256 "$currentScript" | awk '{ print $1 }')
             #Evaluate whether the expected and actual SHA256 do not match
             if [ "$actualSHA256" != "$expectedSHA256" ]; then
-                report_message "Failed Item - Script SHA256 error: $currentScriptPath - Expected $expectedSHA256 - Actual $actualSHA256"
+                report_message "Failed Item - ${1} SHA256 error: $currentScriptPath - Expected $expectedSHA256 - Actual $actualSHA256"
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 # Only increment the progress bar if we're processing Scripts, not InitialScripts since users won't see those
@@ -921,7 +921,7 @@ function process_scripts(){
             actualMD5=$(md5 -q "$currentScript")
             #Evaluate whether the expected and actual MD5 do not match
             if [ "$actualMD5" != "$expectedMD5" ]; then
-                report_message "Failed Item - Script MD5 error: $currentScriptPath - Expected $expectedMD5 - Actual $actualMD5"
+                report_message "Failed Item - ${1} MD5 error: $currentScriptPath - Expected $expectedMD5 - Actual $actualMD5"
                 # Iterate the index up one
                 currentIndex=$((currentIndex+1))
                 # Only increment the progress bar if we're processing Scripts, not InitialScripts since users won't see those
@@ -1007,11 +1007,11 @@ function process_scripts(){
             if [[ $scriptExitCode == 0 ]]; then
                 currentItemComplete="true"
             else
-                report_message "Unsuccessful attempt - Script runtime error: $currentScript on attempt $currentAttemptCount with retry count $currentRetries - Exit Code: $scriptExitCode"
+                report_message "Unsuccessful attempt - ${1} runtime error: $currentScript on attempt $currentAttemptCount with retry count $currentRetries - Exit Code: $scriptExitCode"
             fi
         done
         if [[ "$currentItemComplete" != "true" ]]; then
-            report_message "Failed Item - Script runtime error: $currentScript after $currentAttemptCount attempts - Exit Code: $scriptExitCode"
+            report_message "Failed Item - ${1} runtime error: $currentScript after $currentAttemptCount attempts - Exit Code: $scriptExitCode"
             dialog_status "$currentDisplayName" "${currentStatusIconFail}"
             failList+=("$currentDisplayName")
             update_tracker $currentDisplayName $scriptExitCode
@@ -1021,7 +1021,7 @@ function process_scripts(){
                 bail_on_item_failure "$currentDisplayName" "$scriptExitCode" "${1}" "$currentIndex"
             fi
         else
-            report_message "Successful Item - Script: $currentScript"
+            report_message "Successful Item - ${1}: $currentScript"
             dialog_status "$currentDisplayName" "${currentStatusIconSuccess}"
             successList+=("$currentDisplayName")
             update_tracker $currentDisplayName $scriptExitCode
